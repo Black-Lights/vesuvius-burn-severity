@@ -1,0 +1,72 @@
+"""Area of interest, time windows and constants for the Vesuvius 2025 fire.
+
+Everything a user might want to change lives here, with the reason next to it.
+"""
+
+# Bounding box in EPSG:4326 as (west, south, east, north).
+# Covers the cone of Vesuvius and its south-eastern flank (Terzigno, Ottaviano,
+# Boscotrecase, Trecase), where the August 2025 fire burned. About 13 x 11 km.
+BBOX = (14.35, 40.77, 14.50, 40.87)
+
+# The fire started on the evening of 8 August 2025 and was contained by 12 August.
+FIRE_START = "2025-08-08"
+FIRE_END = "2025-08-12"
+
+# Pre-fire and post-fire windows for the median composites.
+# Pre: dry-season vegetation before the fire; ends the day before the fire.
+# Post: starts after containment, ends before autumn cloud and senescence
+# confound the burn signal.
+PRE_WINDOW = ("2025-06-01", "2025-08-07")
+POST_WINDOW = ("2025-08-13", "2025-10-15")
+
+# Scene-level cloud cover ceiling for the STAC search (percent). Generous on purpose:
+# the per-pixel SCL mask does the real work, and a 25% scene can be clear over the AOI.
+MAX_CLOUD = 25.0
+
+# Bands: blue, green, red (10 m), NIR narrow, SWIR1, SWIR2 (20 m), scene classification (20 m).
+BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12", "SCL"]
+
+# Working resolution in metres. NBR needs B8A and B12, both native 20 m, so the cube is
+# built at 20 m rather than upsampling SWIR to 10 m and pretending it carries 10 m detail.
+RESOLUTION = 20
+
+# The UTM zone of tile 33TVF. Loading straight into it avoids a resample on export.
+CRS = "EPSG:32633"
+
+# SCL classes to mask out (Sentinel-2 L2A scene classification):
+# 0 no data, 1 saturated/defective, 3 cloud shadow, 8 cloud medium probability,
+# 9 cloud high probability, 10 thin cirrus, 11 snow/ice.
+SCL_MASK = (0, 1, 3, 8, 9, 10, 11)
+
+# dNBR burn severity classes, USGS / FIREMON (Key and Benson 2006), thresholds in dNBR units.
+# Order matters: the first break a value is below gives its class.
+SEVERITY_CLASSES = [
+    ("unburned", -9.0, 0.10),
+    ("low", 0.10, 0.27),
+    ("moderate-low", 0.27, 0.44),
+    ("moderate-high", 0.44, 0.66),
+    ("high", 0.66, 9.0),
+]
+
+# Decision rule: severe burn on steep ground.
+#
+# Source: the USGS post-fire debris-flow likelihood model M1 (Staley et al. 2017, Geomorphology 278).
+# Its terrain term is the proportion of upslope area burned at moderate or high severity with a
+# slope of 23 degrees or more. This notebook computes only that terrain term. The full model also
+# needs rainfall intensity and soil erodibility, which are out of scope; the notebook says so.
+#
+# "Moderate or high" starts at dNBR 0.27 (the moderate-low class) in the Key and Benson breaks above.
+# USGS itself uses per-fire BARC maps for that class; the fixed breaks stand in for them here, and the
+# notebook lists that as a limitation. SEVERE_CLASSES is derived from the cut, so there is one number
+# to change and one number to defend.
+SEVERITY_CUT_DNBR = 0.27
+SEVERE_CLASSES = tuple(name for name, low, _high in SEVERITY_CLASSES if low >= SEVERITY_CUT_DNBR)
+
+# Slope threshold in degrees, from the same model. The ranking is rerun at each value in
+# SLOPE_SENSITIVITY_DEG to show that the top cells do not change when the threshold moves a little.
+SLOPE_THRESHOLD_DEG = 23.0
+SLOPE_SENSITIVITY_DEG = (20.0, 23.0, 26.0)
+
+# Side of the grid cell that groups pixels into planning units. 250 m is about 12 x 12 pixels at
+# 20 m: enough to average out single-pixel noise, small enough to point a crew at one slope.
+GRID_CELL_M = 250

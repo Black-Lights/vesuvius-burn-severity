@@ -1,0 +1,32 @@
+# environment and secrets
+.venv/
+.env
+*.env
+!.env.example
+servers/*/.env
+
+# python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# downloaded pixel cache (rebuilt by the notebook; too large for git)
+data/cache/
+
+# model weights pulled by bonus B
+models/
+*.ckpt
+*.safetensors
+
+# OS
+Thumbs.db
+.DS_Store
+
+# private planning, never published
+CLAUDE.md
+PLAN.md
+install.log
+context/

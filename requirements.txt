@@ -1,0 +1,23 @@
+# Core pipeline: STAC search, COG reads, indices, raster/vector outputs, notebook.
+# Python 3.12. Exact versions are frozen in requirements.lock.txt after install.
+pystac-client>=0.8
+planetary-computer>=1.0
+odc-stac>=0.3.10
+rioxarray>=0.17
+rasterio>=1.4
+xarray>=2024.6
+numpy>=1.26,<3
+pandas>=2.2
+geopandas>=1.0
+shapely>=2.0
+pyproj>=3.6
+scipy>=1.13
+matplotlib>=3.8
+folium>=0.17
+rio-cogeo>=5.3
+requests>=2.32
+python-dotenv>=1.0
+jupyter>=1.1
+ipykernel>=6.29
+nbformat>=5.10
+nbconvert>=7.16

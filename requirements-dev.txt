@@ -1,0 +1,3 @@
+# Development only: linting and tests. Not needed to run the notebook.
+ruff>=0.6
+pytest>=8.0

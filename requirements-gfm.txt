@@ -1,0 +1,6 @@
+# Bonus B: geospatial foundation model inference (Prithvi-EO-2.0 burn scars, TerraMind).
+# Install torch first with the CUDA index that matches the machine, e.g.
+#   uv pip install torch --index-url https://download.pytorch.org/whl/cu126
+torch>=2.5
+terratorch>=1.1
+huggingface_hub>=0.25

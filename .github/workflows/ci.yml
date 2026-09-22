@@ -1,0 +1,29 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt -r requirements-dev.txt -e .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Unit tests (pure functions, no network)
+        run: pytest -q
+
+      - name: Every notebook cell has been run
+        run: python scripts/check_notebook_executed.py vesuvius_burn_severity.ipynb

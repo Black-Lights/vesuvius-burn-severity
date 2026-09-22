@@ -33,6 +33,12 @@ RESOLUTION = 20
 # The UTM zone of tile 33TVF. Loading straight into it avoids a resample on export.
 CRS = "EPSG:32633"
 
+# Sentinel-2 L2A number format, from the ESA product definition (not a choice made here). A stored
+# value is reflectance times BOA_QUANTIFICATION_VALUE, plus 1000 since processing baseline 04.00:
+# reflectance = (DN + BOA_ADD_OFFSET) / BOA_QUANTIFICATION_VALUE. The offset of each product is
+# read from the catalogue (catalog.boa_add_offset); the divisor is fixed.
+BOA_QUANTIFICATION_VALUE = 10000
+
 # SCL classes to mask out (Sentinel-2 L2A scene classification):
 # 0 no data, 1 saturated/defective, 3 cloud shadow, 8 cloud medium probability,
 # 9 cloud high probability, 10 thin cirrus, 11 snow/ice.

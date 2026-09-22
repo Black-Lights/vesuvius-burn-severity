@@ -33,6 +33,10 @@ def search_scenes(
     extension is optional and Planetary Computer does not advertise it (pystac-client warns),
     while the date range alone returns a few dozen items at most, so filtering the returned
     metadata is simpler and works against any STAC API.
+
+    Products are returned as listed, one row per product. The same solar day can hold two
+    products (two orbits ten minutes apart, or one acquisition published twice); the load
+    step groups by solar day, so a day counts once in the median either way.
     """
     catalog = open_catalog()
     search = catalog.search(
@@ -45,23 +49,8 @@ def search_scenes(
         for item in search.items()
         if float(item.properties.get("eo:cloud_cover", 100.0)) < max_cloud
     ]
-    return newest_per_acquisition(items)
-
-
-def newest_per_acquisition(items: list[pystac.Item]) -> list[pystac.Item]:
-    """Keep one product per acquisition time, sorted oldest first.
-
-    The same acquisition can be published twice: a reprocessed product keeps the acquisition
-    time and gets a later generation time. Loading both would count that date twice in the
-    median composite. The product id ends with the generation time, so the highest id per
-    acquisition is the newest product.
-    """
-    newest: dict[object, pystac.Item] = {}
-    for item in items:
-        key = item.datetime
-        if key not in newest or item.id > newest[key].id:
-            newest[key] = item
-    return sorted(newest.values(), key=lambda i: i.datetime)
+    items.sort(key=lambda i: i.datetime)
+    return items
 
 
 def scene_table(items: list[pystac.Item]) -> pd.DataFrame:

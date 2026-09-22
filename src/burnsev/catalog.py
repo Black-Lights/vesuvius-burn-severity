@@ -11,6 +11,8 @@ import pandas as pd
 import pystac
 import pystac_client
 
+from . import aoi
+
 STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
 S2_COLLECTION = "sentinel-2-l2a"
 DEM_COLLECTION = "cop-dem-glo-30"
@@ -67,14 +69,14 @@ def scene_table(items: list[pystac.Item]) -> pd.DataFrame:
                 "tile": p.get("s2:mgrs_tile"),
                 "cloud_pct": round(float(p.get("eo:cloud_cover", float("nan"))), 1),
                 "baseline": p.get("s2:processing_baseline"),
-                "boa_offset": boa_offset(item),
+                "boa_add_offset": boa_add_offset(item),
             }
         )
     return pd.DataFrame(rows)
 
 
-def boa_offset(item: pystac.Item) -> int:
-    """Additive offset to apply to L2A digital numbers before scaling to reflectance.
+def boa_add_offset(item: pystac.Item) -> int:
+    """ESA BOA_ADD_OFFSET in digital numbers, added before dividing by BOA_QUANTIFICATION_VALUE.
 
     ESA changed the L2A format with processing baseline 04.00 (25 January 2022): every
     reflectance band carries BOA_ADD_OFFSET = -1000, so that reflectance =
@@ -88,14 +90,32 @@ def boa_offset(item: pystac.Item) -> int:
     if asset is not None:
         bands = asset.extra_fields.get("raster:bands") or []
         if bands and "offset" in bands[0]:
-            # raster:bands gives the offset in reflectance units (e.g. -0.1); convert to DN.
-            return round(float(bands[0]["offset"]) * 10000)
+            # raster:bands states the same offset in reflectance units (-0.1 = -1000 / 10000);
+            # convert it to digital numbers.
+            return round(float(bands[0]["offset"]) * aoi.BOA_QUANTIFICATION_VALUE)
     baseline = str(item.properties.get("s2:processing_baseline", "00.00"))
     try:
         major = float(baseline)
     except ValueError:
         major = 0.0
     return -1000 if major >= 4.0 else 0
+
+
+def offsets_by_day(items: list[pystac.Item]) -> dict[str, int]:
+    """Map each acquisition date (ISO string) to its BOA offset in DN.
+
+    The cube has one time step per solar day, so the offset must be known per day. At this
+    longitude a morning pass has the same date in solar and UTC time. If two products of
+    one day disagree (different baselines), the day is refused rather than guessed.
+    """
+    out: dict[str, int] = {}
+    for item in items:
+        day = item.datetime.date().isoformat()
+        offset = boa_add_offset(item)
+        if out.get(day, offset) != offset:
+            raise ValueError(f"{day}: products with different offsets {out[day]} and {offset}")
+        out[day] = offset
+    return out
 
 
 def search_dem(bbox: tuple[float, float, float, float]) -> list[pystac.Item]:

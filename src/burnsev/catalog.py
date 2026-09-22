@@ -29,25 +29,39 @@ def search_scenes(
     """Return Sentinel-2 L2A items over ``bbox`` between ``start`` and ``end`` (inclusive
     dates, ISO strings) with scene cloud cover below ``max_cloud`` percent, oldest first.
 
-    Duplicate item ids are dropped: the API can list the same item twice when two
-    search pages overlap.
+    The cloud filter is applied here, in Python, rather than in the request. The STAC query
+    extension is optional and Planetary Computer does not advertise it (pystac-client warns),
+    while the date range alone returns a few dozen items at most, so filtering the returned
+    metadata is simpler and works against any STAC API.
     """
     catalog = open_catalog()
     search = catalog.search(
         collections=[S2_COLLECTION],
         bbox=list(bbox),
         datetime=f"{start}/{end}",
-        query={"eo:cloud_cover": {"lt": max_cloud}},
     )
-    seen: set[str] = set()
-    items: list[pystac.Item] = []
-    for item in search.items():
-        if item.id in seen:
-            continue
-        seen.add(item.id)
-        items.append(item)
-    items.sort(key=lambda i: i.datetime)
-    return items
+    items = [
+        item
+        for item in search.items()
+        if float(item.properties.get("eo:cloud_cover", 100.0)) < max_cloud
+    ]
+    return newest_per_acquisition(items)
+
+
+def newest_per_acquisition(items: list[pystac.Item]) -> list[pystac.Item]:
+    """Keep one product per acquisition time, sorted oldest first.
+
+    The same acquisition can be published twice: a reprocessed product keeps the acquisition
+    time and gets a later generation time. Loading both would count that date twice in the
+    median composite. The product id ends with the generation time, so the highest id per
+    acquisition is the newest product.
+    """
+    newest: dict[object, pystac.Item] = {}
+    for item in items:
+        key = item.datetime
+        if key not in newest or item.id > newest[key].id:
+            newest[key] = item
+    return sorted(newest.values(), key=lambda i: i.datetime)
 
 
 def scene_table(items: list[pystac.Item]) -> pd.DataFrame:
@@ -59,6 +73,7 @@ def scene_table(items: list[pystac.Item]) -> pd.DataFrame:
             {
                 "id": item.id,
                 "date": item.datetime.date().isoformat(),
+                "satellite": p.get("platform"),
                 "orbit": p.get("sat:relative_orbit"),
                 "tile": p.get("s2:mgrs_tile"),
                 "cloud_pct": round(float(p.get("eo:cloud_cover", float("nan"))), 1),

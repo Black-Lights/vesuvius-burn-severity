@@ -27,3 +27,33 @@ jobs:
 
       - name: Every notebook cell has been run
         run: python scripts/check_notebook_executed.py vesuvius_burn_severity.ipynb
+
+  notebook:
+    # The real proof of reproducibility: a clean machine with no cache and no local settings
+    # installs the requirements and runs the notebook top to bottom, downloading the pixels.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt -e .
+
+      - name: Execute the notebook on a fresh machine
+        run: >
+          jupyter nbconvert --execute --to notebook
+          --ExecutePreprocessor.timeout=1500
+          --output executed --output-dir ci-out
+          vesuvius_burn_severity.ipynb
+
+      - name: Keep the executed notebook as a build artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: executed-notebook
+          path: ci-out/executed.ipynb
+          retention-days: 14

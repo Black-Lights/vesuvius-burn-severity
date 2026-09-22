@@ -29,23 +29,26 @@ def search_scenes(
     """Return Sentinel-2 L2A items over ``bbox`` between ``start`` and ``end`` (inclusive
     dates, ISO strings) with scene cloud cover below ``max_cloud`` percent, oldest first.
 
-    Duplicate item ids are dropped: the API can list the same item twice when two
-    search pages overlap.
+    The cloud filter is applied here, in Python, rather than in the request. The STAC query
+    extension is optional and Planetary Computer does not advertise it (pystac-client warns),
+    while the date range alone returns a few dozen items at most, so filtering the returned
+    metadata is simpler and works against any STAC API.
+
+    Products are returned as listed, one row per product. The same solar day can hold two
+    products (two orbits ten minutes apart, or one acquisition published twice); the load
+    step groups by solar day, so a day counts once in the median either way.
     """
     catalog = open_catalog()
     search = catalog.search(
         collections=[S2_COLLECTION],
         bbox=list(bbox),
         datetime=f"{start}/{end}",
-        query={"eo:cloud_cover": {"lt": max_cloud}},
     )
-    seen: set[str] = set()
-    items: list[pystac.Item] = []
-    for item in search.items():
-        if item.id in seen:
-            continue
-        seen.add(item.id)
-        items.append(item)
+    items = [
+        item
+        for item in search.items()
+        if float(item.properties.get("eo:cloud_cover", 100.0)) < max_cloud
+    ]
     items.sort(key=lambda i: i.datetime)
     return items
 
@@ -59,6 +62,7 @@ def scene_table(items: list[pystac.Item]) -> pd.DataFrame:
             {
                 "id": item.id,
                 "date": item.datetime.date().isoformat(),
+                "satellite": p.get("platform"),
                 "orbit": p.get("sat:relative_orbit"),
                 "tile": p.get("s2:mgrs_tile"),
                 "cloud_pct": round(float(p.get("eo:cloud_cover", float("nan"))), 1),

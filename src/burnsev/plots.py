@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import matplotlib.dates as mdates
 import numpy as np
+import pandas as pd
 import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
@@ -57,5 +59,43 @@ def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
             usable = float(ds_day["valid_fraction"]) * 100
             ax.set_title(f"{label}, {day} ({usable:.0f}% usable)")
             ax.set_axis_off()
+    fig.tight_layout()
+    return fig
+
+
+def nbr_history_and_dnbr(
+    nbr: xr.DataArray,
+    dnbr: xr.DataArray,
+    burn: xr.DataArray,
+    pre: tuple[str, str],
+    post: tuple[str, str],
+    fire: tuple[str, str],
+    min_usable: float = 0.5,
+) -> Figure:
+    """Left: mean NBR per date inside the burn and over the unburned rest of the box, with the
+    two windows and the fire days shaded. Right: the dNBR map.
+
+    A date enters a line only if at least ``min_usable`` of that area is usable on it; the
+    orbit that sees only the west of the box would otherwise produce meaningless means.
+    """
+    unburned = (abs(dnbr) < 0.1) & dnbr.notnull()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5), gridspec_kw={"width_ratios": [1.5, 1]})
+    lines = ((burn, "inside the burn", "firebrick"), (unburned, "unburned rest of the box", "seagreen"))
+    for mask, label, colour in lines:
+        sub = nbr.where(mask)
+        usable = sub.notnull().sum(("y", "x")) / int(mask.sum())
+        series = sub.mean(("y", "x")).where(usable >= min_usable).to_pandas().dropna()
+        ax1.plot(series.index, series.values, marker="o", color=colour, label=label)
+    ax1.axvspan(pd.Timestamp(pre[0]), pd.Timestamp(pre[1]), color="grey", alpha=0.12, label="windows")
+    ax1.axvspan(pd.Timestamp(post[0]), pd.Timestamp(post[1]), color="grey", alpha=0.12)
+    ax1.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.5, label="fire")
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax1.set_ylabel("mean NBR")
+    ax1.set_title(f"NBR over time, dates with at least {min_usable:.0%} of the area usable")
+    ax1.legend(loc="lower left")
+    image = ax2.imshow(dnbr.values, cmap="RdYlGn_r", vmin=-0.3, vmax=0.9)
+    fig.colorbar(image, ax=ax2, shrink=0.8, label="dNBR")
+    ax2.set_title("dNBR: pre-fire median minus post-fire median")
+    ax2.set_axis_off()
     fig.tight_layout()
     return fig

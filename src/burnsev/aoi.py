@@ -13,17 +13,35 @@ FIRE_START = "2025-08-08"
 FIRE_END = "2025-08-12"
 
 # Pre-fire and post-fire windows for the median composites.
-# Pre: dry-season vegetation before the fire; ends the day before the fire.
-# Post: starts after containment, ends before autumn cloud and senescence
-# confound the burn signal.
-PRE_WINDOW = ("2025-06-01", "2025-08-07")
-POST_WINDOW = ("2025-08-13", "2025-10-15")
+# Pre: same season as the fire, ends the day before it. It starts on 1 July, not 1 June: the
+# unburned reference stays flat all summer, but inside the future burn NBR slides from 0.50 in
+# June to 0.38 on 6 August (drying understory, small early-August fires), so a June-to-August
+# median overstates the pre-fire state and inflates dNBR. Severe area (dNBR >= 0.27): 611 ha
+# with June, 564 ha with July, 525 ha with 6 August alone. July keeps a median with at least two
+# observations per pixel.
+# Post: starts after containment and lasts one month. Recovery begins within weeks (mean NBR in
+# the burn -0.16 on 14 Aug, -0.06 by early September, +0.07 by 13 Oct), so a longer median mixes
+# recovery into severity and halves the high class (91 ha with a median to 15 Oct, 149 ha to
+# 15 Sep, 204 ha from the first clear image; total burned area 564, 591 and 628 ha). One month is
+# the timing of the Key and Benson initial assessment and still a median over several dates.
+PRE_WINDOW = ("2025-07-01", "2025-08-07")
+POST_WINDOW = ("2025-08-13", "2025-09-15")
+
+# Scenes are loaded over a longer span than the composites use, so the NBR time series in step 5
+# shows the June slide before the fire and the recovery after it. The composites ignore the extra
+# dates.
+SERIES_START = "2025-06-01"
+SERIES_END = "2025-10-15"
 
 # Scene-level cloud cover ceiling for the STAC search (percent). Generous on purpose:
 # the per-pixel SCL mask does the real work, and a 25% scene can be clear over the AOI.
 MAX_CLOUD = 25.0
 
-# Bands: blue, green, red (10 m), NIR narrow, SWIR1, SWIR2 (20 m), scene classification (20 m).
+# Bands, each with a job: B02, B03, B04 (blue, green, red, 10 m) for the pictures; B8A (near
+# infrared) and B12 (short-wave infrared 2), both 20 m, for the burn index; SCL, the scene
+# classification (20 m), for the cloud mask. B11 (short-wave infrared 1, 20 m) is not used by
+# the core: the foundation model in bonus B expects the six Harmonized Landsat Sentinel bands
+# (B02, B03, B04, B8A, B11, B12), so it is downloaded once with the others.
 BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12", "SCL"]
 
 # Working resolution in metres. NBR needs B8A and B12, both native 20 m, so the cube is

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import matplotlib.dates as mdates
 import numpy as np
+import pandas as pd
 import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
+
+plt.rcParams.update({"font.size": 13, "axes.titlesize": 14, "legend.fontsize": 12})
 
 TRUE_COLOUR = ("B04", "B03", "B02")  # red, green, blue
 SWIR_COLOUR = ("B12", "B8A", "B04")  # short-wave infrared, near infrared, red
@@ -40,6 +44,35 @@ def to_rgb(
     return np.dstack(layers)
 
 
+def usable_share(refl: xr.Dataset, orbits: dict[str, set[int]], fire: tuple[str, str]) -> Figure:
+    """Share of the box that is usable on each date, in percent, coloured by the orbit that saw it.
+
+    ``orbits`` maps each date to the relative orbits of its products (two when both orbits
+    passed the same day). Fire days are shaded.
+    """
+    share = refl["valid_fraction"].to_pandas() * 100
+    labels = {}
+    for day in share.index:
+        seen = orbits[str(day.date())]
+        labels[day] = "both orbits" if len(seen) > 1 else f"orbit {next(iter(seen))}"
+    colours = {"orbit 79": "tab:blue", "orbit 122": "tab:purple", "both orbits": "tab:green"}
+    fig, ax = plt.subplots(figsize=(12, 3.8))
+    ax.plot(share.index, share.values, color="lightgrey", zorder=1)
+    for label, colour in colours.items():
+        days = [d for d in share.index if labels[d] == label]
+        if days:
+            ax.scatter(days, share[days], color=colour, label=label, zorder=2)
+    ax.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.5, label="fire")
+    ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax.set_xlabel("2025")
+    ax.set_ylabel("usable share of the box (%)")
+    ax.set_ylim(0, 105)
+    ax.legend(loc="lower right", ncol=4)
+    fig.tight_layout()
+    return fig
+
+
 def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
     """Two rows (true colour, short-wave infrared colour) by two dates, one stretch per band.
 
@@ -57,5 +90,53 @@ def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
             usable = float(ds_day["valid_fraction"]) * 100
             ax.set_title(f"{label}, {day} ({usable:.0f}% usable)")
             ax.set_axis_off()
+    fig.tight_layout()
+    return fig
+
+
+def nbr_history_and_dnbr(
+    nbr: xr.DataArray,
+    dnbr: xr.DataArray,
+    burn: xr.DataArray,
+    pre: tuple[str, str],
+    post: tuple[str, str],
+    fire: tuple[str, str],
+    min_usable: float = 0.5,
+) -> Figure:
+    """Left: mean NBR per date inside the burn and over the unburned rest of the box, with the
+    two windows and the fire days shaded. Right: the dNBR map.
+
+    A date enters a line only if at least ``min_usable`` of that area is usable on it; the
+    orbit that sees only the west of the box would otherwise produce meaningless means.
+    """
+    unburned = (abs(dnbr) < 0.1) & dnbr.notnull()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(17, 6), gridspec_kw={"width_ratios": [1.5, 1]})
+    lines = (
+        (burn, "burned area (dNBR > 0.27)", "firebrick"),
+        (unburned, "unburned area (dNBR within 0.1 of zero)", "seagreen"),
+    )
+    for mask, label, colour in lines:
+        sub = nbr.where(mask)
+        usable = sub.notnull().sum(("y", "x")) / int(mask.sum())
+        series = sub.mean(("y", "x")).where(usable >= min_usable).to_pandas().dropna()
+        ax1.plot(series.index, series.values, marker="o", markersize=7, linewidth=2, color=colour,
+                 label=label)
+    top = ax1.get_ylim()[1]
+    for (a, b), name in ((pre, "pre-fire window"), (post, "post-fire window")):
+        ax1.axvspan(pd.Timestamp(a), pd.Timestamp(b), color="grey", alpha=0.12)
+        ax1.text(pd.Timestamp(a) + (pd.Timestamp(b) - pd.Timestamp(a)) / 2, top, name,
+                 ha="center", va="top", color="#444")
+    ax1.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.6, label="fire")
+    ax1.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax1.set_xlabel("2025")
+    ax1.set_ylabel("mean NBR over the area")
+    ax1.set_title(f"Mean NBR per date (dates with at least {min_usable:.0%} of the area usable)")
+    ax1.grid(alpha=0.3)
+    ax1.legend(loc="lower left")
+    image = ax2.imshow(dnbr.values, cmap="RdYlGn_r", vmin=-0.3, vmax=0.9)
+    fig.colorbar(image, ax=ax2, shrink=0.8, label="dNBR (red = vegetation lost)")
+    ax2.set_title("dNBR map: pre-fire median minus post-fire median")
+    ax2.set_axis_off()
     fig.tight_layout()
     return fig

@@ -28,6 +28,13 @@ def test_offsets_by_day_refuses_a_day_with_two_different_offsets():
         catalog.offsets_by_day([new, old])
 
 
+def test_orbits_by_day_collects_both_orbits_of_one_day():
+    a = _item("a", T0, **{"sat:relative_orbit": 79})
+    b = _item("b", T0, **{"sat:relative_orbit": 122})
+    assert catalog.orbits_by_day([a]) == {"2025-06-07": {79}}
+    assert catalog.orbits_by_day([a, b]) == {"2025-06-07": {79, 122}}
+
+
 def test_offset_prefers_raster_bands_metadata_when_published():
     item = _item("rb", T0, **{"s2:processing_baseline": "05.11"})
     item.add_asset(

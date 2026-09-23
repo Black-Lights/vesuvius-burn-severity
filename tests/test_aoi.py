@@ -13,6 +13,7 @@ def test_windows_do_not_overlap_the_fire():
     # ISO date strings compare correctly as text.
     assert aoi.PRE_WINDOW[1] < aoi.FIRE_START
     assert aoi.POST_WINDOW[0] > aoi.FIRE_END
+    assert aoi.SERIES_START <= aoi.PRE_WINDOW[0]
 
 
 def test_severity_classes_are_contiguous_and_ordered():

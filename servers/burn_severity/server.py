@@ -6,8 +6,10 @@ eve-esa/mcp-tool-registry. The logic lives in ``burnsev.api``; this file only tu
 it into tools and JSON.
 
 Tools:
-    find_fires   - EFFIS burnt areas in an area and period: dates, hectares, own bbox
-    list_scenes  - Sentinel-2 L2A scenes over an area and period, with cloud cover
+    find_fires         - EFFIS burnt areas in an area and period: dates, hectares, own bbox
+    list_scenes        - Sentinel-2 L2A scenes over an area and period, with cloud cover
+    assess_burn        - the notebook for any fire: severity, slope, ranked cells, files
+    vegetation_change  - median NDVI in two periods and where it dropped
 
 Usage:
     python server.py --transport stdio                 # local clients, started as a child process
@@ -94,6 +96,70 @@ async def list_scenes(bbox: str, start: str, end: str, max_cloud: float = 25.0) 
         satellite, orbit, tile and cloud percentage.
     """
     return await _run(api.list_scenes, bbox=bbox, start=start, end=end, max_cloud=max_cloud)
+
+
+@mcp.tool()
+async def assess_burn(
+    bbox: str,
+    fire_start: str,
+    fire_end: str,
+    slope_threshold_deg: float = 23.0,
+    margin_km: float = 0.0,
+) -> str:
+    """Map how badly a fire burned and rank where to act first against erosion before the rains.
+
+    Downloads Sentinel-2 L2A over the area and compares the median NBR of the 38 days before the
+    fire with that of the 34 days after it (dNBR). Classes severity (Key and Benson 2006), keeps
+    the main burned patch, adds slope, and ranks 250 m cells by the share of ground that is both
+    burned at moderate or high severity and at least slope_threshold_deg steep (the terrain term
+    of the USGS M1 debris-flow model, Staley et al. 2017). Takes one to a few minutes the first
+    time for an area; a repeated call is read from the cache.
+
+    Args:
+        bbox: Area around the whole fire as "west,south,east,north" in decimal degrees (WGS 84),
+            at most 0.25 degree a side. The bbox from find_fires hugs the burn: use it with
+            margin_km=1.
+        fire_start: First day of the fire, YYYY-MM-DD (find_fires gives it).
+        fire_end: Last day of the fire, YYYY-MM-DD.
+        slope_threshold_deg: Slope from the horizontal that counts as steep, default 23 degrees
+            (a 42 % grade), the value of the M1 model.
+        margin_km: Grow the bbox by this many km on every side, default 0.
+
+    Returns:
+        JSON with the windows used, burned and severe hectares, hectares per severity class,
+        severe and steep hectares, the number of first and second priority cells, the top 10
+        cells with latitude and longitude, how the first list changes at 3 degrees less and
+        more, a plain-language summary, the files written (Cloud-Optimised GeoTIFF and GeoJSON)
+        and warnings.
+    """
+    return await _run(api.assess_burn, bbox=bbox, fire_start=fire_start, fire_end=fire_end,
+                      slope_threshold_deg=slope_threshold_deg, margin_km=margin_km)
+
+
+@mcp.tool()
+async def vegetation_change(bbox: str, period_a: str, period_b: str, min_drop: float = 0.1) -> str:
+    """Compare vegetation in an area between two periods and say where it dropped.
+
+    Uses the per-pixel median NDVI of each period from Sentinel-2 L2A, clouds masked. Reports
+    the median NDVI of each period, the hectares where NDVI fell by at least min_drop, and the
+    largest patches of loss with their centres. Compare the same months of two years, otherwise
+    the season changes NDVI too. Takes one to a few minutes the first time for an area.
+
+    Args:
+        bbox: Area as "west,south,east,north" in decimal degrees (WGS 84), at most 0.25 degree
+            a side.
+        period_a: The earlier period as "YYYY-MM-DD/YYYY-MM-DD", for example
+            "2022-06-01/2022-08-31" for summer 2022.
+        period_b: The later period, same format.
+        min_drop: Smallest fall in NDVI that counts as a drop, default 0.1.
+
+    Returns:
+        JSON with the scenes used, the median NDVI of each period, the hectares and share that
+        dropped, the five largest patches of drop (hectares, mean change, latitude, longitude),
+        the files written and notes.
+    """
+    return await _run(api.vegetation_change, bbox=bbox, period_a=period_a, period_b=period_b,
+                      min_drop=min_drop)
 
 
 if __name__ == "__main__":

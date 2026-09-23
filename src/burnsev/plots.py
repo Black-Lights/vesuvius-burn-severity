@@ -224,3 +224,46 @@ def agreement_map(ours: xr.DataArray, ref: xr.DataArray, scores: dict[str, float
     ax.set_axis_off()
     fig.tight_layout()
     return fig
+
+
+def slope_and_fire(
+    slope: xr.DataArray,
+    fire: xr.DataArray,
+    severe: xr.DataArray,
+    thresholds: tuple[float, ...],
+    chosen: float,
+) -> Figure:
+    """Left: slope in degrees over the box with the main fire outlined. Right: how the slope
+    inside the fire is distributed, severe and not severe, with the candidate thresholds.
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(17, 6.5), gridspec_kw={"width_ratios": [1.2, 1]})
+    image = ax1.imshow(slope.values, cmap="magma_r", vmin=0, vmax=45)
+    ax1.contour(fire.values.astype(float), levels=[0.5], colors="deepskyblue", linewidths=1.8)
+    fig.colorbar(image, ax=ax1, shrink=0.8, label="slope (degrees)")
+    ax1.set_title("Slope from the Copernicus DEM on the 20 m grid; main fire in blue")
+    ax1.set_axis_off()
+    s = slope.values
+    bins = np.arange(0, 52, 2)
+    in_fire = fire.values.astype(bool)
+    sev = severe.values.astype(bool)
+    ha = float(abs(slope.x[1] - slope.x[0])) ** 2 / 10_000
+    bottom = np.zeros(len(bins) - 1)
+    for mask, label, colour in (
+        (in_fire & sev, "severe (moderate-low and above)", "#b30000"),
+        (in_fire & ~sev, "low severity", "#fec44f"),
+    ):
+        counts, _ = np.histogram(s[mask & ~np.isnan(s)], bins=bins)
+        ax2.bar(bins[:-1], counts * ha, bottom=bottom, width=2, align="edge", color=colour,
+                edgecolor="white", linewidth=0.5, label=label)
+        bottom += counts * ha
+    for t in thresholds:
+        style = "-" if t == chosen else "--"
+        ax2.axvline(t, color="black", linestyle=style, linewidth=1.8 if t == chosen else 1)
+        ax2.text(t, 1.01, f"{t:.0f}°", transform=ax2.get_xaxis_transform(), ha="center", va="bottom")
+    ax2.set_xlabel("slope (degrees)")
+    ax2.set_ylabel("hectares per 2° bin")
+    ax2.set_title("Slope inside the main fire, by severity", pad=24)
+    ax2.legend(loc="upper right")
+    ax2.grid(alpha=0.3)
+    fig.tight_layout()
+    return fig

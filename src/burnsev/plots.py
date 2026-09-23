@@ -16,12 +16,13 @@ plt.rcParams.update({"font.size": 13, "axes.titlesize": 14, "legend.fontsize": 1
 
 
 
-def fit_figures_to_width(dpi: int = 100) -> None:
-    """Draw every figure at the full width of the notebook's output area, whatever its size.
+def fit_figures_to_width(dpi: int = 100, max_width: int = 1000) -> None:
+    """Draw every figure at the width of the notebook's output area, up to ``max_width`` pixels.
 
     Notebook front ends show a PNG at its own pixel width, so a figure wider than the pane
-    scrolls sideways and a narrow one leaves space. Each figure is shown instead as an HTML
-    image at 100 % width, stored once. Outside IPython this does nothing.
+    scrolls sideways. Each figure is shown instead as an HTML image at 100 % width, capped
+    and centred so a wide browser window does not blow it up; stored once. Outside IPython
+    this does nothing.
     """
     from IPython import get_ipython
 
@@ -33,7 +34,8 @@ def fit_figures_to_width(dpi: int = 100) -> None:
         buffer = io.BytesIO()
         fig.savefig(buffer, format="png", dpi=dpi, bbox_inches="tight")
         data = base64.b64encode(buffer.getvalue()).decode("ascii")
-        return f'<img src="data:image/png;base64,{data}" style="width:100%; height:auto">'
+        style = f"width:100%; max-width:{max_width}px; height:auto; display:block; margin:auto"
+        return f'<img src="data:image/png;base64,{data}" style="{style}">'
 
     # Starting the notebook plotting backend resets every figure formatter, so start it first.
     plt.close(plt.figure())

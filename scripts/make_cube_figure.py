@@ -1,5 +1,5 @@
-"""Draw docs/figures/cube.png from the cached cube: one band as a stack of dated images, and
-the seven bands of one date side by side.
+"""Draw docs/figures/cube.png from the cached cube: one band as a 3-D stack of dated images, and
+the seven bands of the same dates as smaller stacks.
 
 Run after step 3 of the notebook has built data/cache/s2_dn_20m.nc:
     python scripts/make_cube_figure.py
@@ -10,11 +10,13 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
+from matplotlib.patches import Polygon
+from matplotlib.transforms import Affine2D
 
 from burnsev import aoi, catalog, indices, ingest
 
-STACK_DATES = ["2025-06-05", "2025-06-07", "2025-06-15", "2025-07-25", "2025-10-08", "2025-10-13"]
-SHOW_DATE = "2025-08-14"
+STACK_DATES = ["2025-06-05", "2025-06-15", "2025-07-25", "2025-08-14", "2025-09-18", "2025-10-13"]
+SMALL_DATES = ["2025-06-05", "2025-08-14", "2025-10-13"]
 BANDS = [
     ("B02", "blue", "pictures"),
     ("B03", "green", "pictures"),
@@ -28,6 +30,9 @@ SCL_COLOURS = ListedColormap(
     ["black", "red", "#404040", "#8b5a2b", "#2e8b57", "#e6c700", "#1f77b4", "#a0a0a0",
      "#d0d0d0", "#ffffff", "#40e0d0", "#ff69b4"]
 )
+ASPECT = 560 / 637  # rows over columns
+FLATTEN = 0.45  # how much a layer is squashed to look like it lies flat
+MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
 def grey(values: np.ndarray) -> np.ndarray:
@@ -36,65 +41,83 @@ def grey(values: np.ndarray) -> np.ndarray:
     return np.where(np.isnan(scaled), 0.9, np.clip(scaled, 0, 1))
 
 
+def layer_transform(x0: float, y0: float, width: float, shear: float) -> Affine2D:
+    """Map image coordinates (0..width, 0..height) onto a flat-lying parallelogram at (x0, y0)."""
+    height = width * ASPECT
+    return Affine2D().scale(1, FLATTEN).skew(np.arctan(shear / (height * FLATTEN)), 0).translate(x0, y0)
+
+
+def draw_layer(ax, image, x0, y0, width, shear, cmap="gray", vmin=0, vmax=1, edge="#5b6b7c"):
+    height = width * ASPECT
+    trans = layer_transform(x0, y0, width, shear)
+    art = ax.imshow(image, extent=[0, width, 0, height], cmap=cmap, vmin=vmin, vmax=vmax,
+                    interpolation="bilinear", origin="upper")
+    art.set_transform(trans + ax.transData)
+    corners = trans.transform([[0, 0], [width, 0], [width, height], [0, height]])
+    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=0.8))
+    return trans
+
+
+def pixel_xy(trans: Affine2D, col: int, row: int, width: float) -> tuple[float, float]:
+    height = width * ASPECT
+    x, y = trans.transform([col / 637 * width, (1 - row / 560) * height])
+    return float(x), float(y)
+
+
 def main() -> Path:
     dn = ingest.load_cached(ingest.cache_path("s2_dn_20m"))
     items = catalog.search_scenes(aoi.BBOX, *aoi.PRE_WINDOW, aoi.MAX_CLOUD) + catalog.search_scenes(
         aoi.BBOX, *aoi.POST_WINDOW, aoi.MAX_CLOUD
     )
     refl = ingest.mask_and_scale(dn, catalog.offsets_by_day(items))
-    nbr = indices.nbr(refl)
-    dnbr = indices.dnbr(nbr, aoi.PRE_WINDOW, aoi.POST_WINDOW)
+    dnbr = indices.dnbr(indices.nbr(refl), aoi.PRE_WINDOW, aoi.POST_WINDOW)
     row, col = np.unravel_index(int(np.nanargmax(dnbr.values)), dnbr.shape)  # a burned pixel
 
     fig = plt.figure(figsize=(14, 7.2))
-    fig.text(0.21, 0.95, "One band (B12): 46 dated images in a stack, 6 shown",
-             ha="center", fontsize=14, weight="bold")
-    fig.text(0.71, 0.95, f"Seven such stacks, one per band ({SHOW_DATE} shown)",
-             ha="center", fontsize=14, weight="bold")
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, 14)
+    ax.set_ylim(0, 7.2)
+    ax.set_axis_off()
+    ax.text(3.3, 6.85, "One band (B12): 46 dated images in a stack, 6 shown", ha="center",
+            fontsize=14, weight="bold")
+    ax.text(10.4, 6.85, "Seven such stacks, one per band", ha="center", fontsize=14, weight="bold")
 
-    # Left: a cascade of real B12 images, oldest at the bottom, one pixel followed through them.
-    w, h = 0.24, 0.24 * (560 / 637) * (14 / 7.2)
-    corners = []
+    # Left: the big stack, oldest at the bottom, one pixel followed through it.
+    width, shear, step, x0, y0 = 4.0, 1.3, 0.62, 0.9, 0.95
+    marks = []
     for k, day in enumerate(STACK_DATES):
-        left, bottom = 0.04 + 0.024 * k, 0.10 + 0.052 * k
-        ax = fig.add_axes([left, bottom, w, h])
-        ax.imshow(grey(refl["B12"].sel(time=day).squeeze("time").values), cmap="gray", vmin=0, vmax=1)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for spine in ax.spines.values():
-            spine.set_edgecolor("#5b6b7c")
-        month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        fig.text(0.036, bottom + 0.012, f"{int(day[8:])} {month[int(day[5:7]) - 1]}",
-                 ha="right", va="bottom", fontsize=10)
-        corners.append((left + w * col / 637, bottom + h * (1 - row / 560)))
-        if k in (0, len(STACK_DATES) - 1):
-            ax.plot(col, row, "s", color="#c0392b", markersize=7)
-    (x0, y0), (x1, y1) = corners[0], corners[-1]
-    fig.add_artist(plt.Line2D([x0, x1], [y0, y1], color="#c0392b", linestyle="--", linewidth=1.5))
-    fig.text(0.21, 0.80, "red square: the same pixel on every date", color="#c0392b", fontsize=10,
-             ha="center")
-    fig.text(0.21, 0.035, "Follow the red pixel down the stack: 46 numbers. The median is the middle one.\n"
-             "Each image: 637 by 560 pixels of 20 m.", ha="center", fontsize=10, color="#333")
+        trans = draw_layer(ax, grey(refl["B12"].sel(time=day).squeeze("time").values),
+                           x0, y0 + k * step, width, shear)
+        ax.text(x0 - 0.12, y0 + k * step + 0.05, f"{int(day[8:])} {MONTH[int(day[5:7]) - 1]}",
+                ha="right", va="bottom", fontsize=10)
+        marks.append(pixel_xy(trans, col, row, width))
+    (xb, yb), (xt, yt) = marks[0], marks[-1]
+    ax.plot([xb, xt], [yb, yt], linestyle="--", color="#c0392b", linewidth=1.5)
+    ax.plot([xb, xt], [yb, yt], "s", color="#c0392b", markersize=6)
+    ax.text(xt, 5.9, "red: the same pixel on every date", color="#c0392b", fontsize=10, ha="center")
+    ax.text(3.3, 0.42, "Follow the red pixel down the stack: 46 numbers. The median is the middle one.",
+            ha="center", fontsize=10, color="#333")
+    ax.text(3.3, 0.15, "Each image: 637 by 560 pixels of 20 m.", ha="center", fontsize=10, color="#555")
 
-    # Right: the seven bands of one date.
-    tw, th = 0.105, 0.105 * (560 / 637) * (14 / 7.2)
-    positions = [(0.47, 0.60), (0.60, 0.60), (0.73, 0.60), (0.86, 0.60), (0.535, 0.20), (0.665, 0.20), (0.795, 0.20)]
-    day = refl.sel(time=SHOW_DATE).squeeze("time")
-    scl = dn["SCL"].sel(time=SHOW_DATE).squeeze("time").values
-    for (band, meaning, job), (left, bottom) in zip(BANDS, positions):
-        ax = fig.add_axes([left, bottom, tw, th])
-        if band == "SCL":
-            ax.imshow(scl, cmap=SCL_COLOURS, vmin=0, vmax=11, interpolation="nearest")
-        else:
-            ax.imshow(grey(day[band].values), cmap="gray", vmin=0, vmax=1)
-        ax.set_xticks([])
-        ax.set_yticks([])
-        fig.text(left + tw / 2, bottom - 0.035, band, ha="center", fontsize=11, weight="bold")
-        fig.text(left + tw / 2, bottom - 0.065, meaning, ha="center", fontsize=10)
-        fig.text(left + tw / 2, bottom - 0.095, job, ha="center", fontsize=10, color="#666")
-    fig.text(0.71, 0.035, "NBR uses B8A and B12. Pictures use B02, B03, B04. SCL marks cloud, shadow and missing pixels.\n"
-             "Bonus B wants all six reflectance bands, so B11 is downloaded too.",
-             ha="center", fontsize=10, color="#333")
+    # Right: a small stack per band, the same three dates in each.
+    swidth, sshear, sstep = 1.25, 0.4, 0.2
+    positions = [(7.3, 4.3), (8.85, 4.3), (10.4, 4.3), (11.95, 4.3), (8.1, 1.55), (9.65, 1.55), (11.2, 1.55)]
+    for (band, meaning, job), (sx, sy) in zip(BANDS, positions):
+        for k, day in enumerate(SMALL_DATES):
+            if band == "SCL":
+                image = dn["SCL"].sel(time=day).squeeze("time").values
+                draw_layer(ax, image, sx, sy + k * sstep, swidth, sshear, cmap=SCL_COLOURS, vmin=0, vmax=11)
+            else:
+                draw_layer(ax, grey(refl[band].sel(time=day).squeeze("time").values),
+                           sx, sy + k * sstep, swidth, sshear)
+        cx = sx + (swidth + sshear) / 2
+        ax.text(cx, sy - 0.28, band, ha="center", fontsize=11, weight="bold")
+        ax.text(cx, sy - 0.52, meaning, ha="center", fontsize=10)
+        ax.text(cx, sy - 0.76, job, ha="center", fontsize=10, color="#666")
+    ax.text(10.4, 0.42, "NBR uses B8A and B12. Pictures use B02, B03, B04. SCL marks cloud, shadow and missing pixels.",
+            ha="center", fontsize=10, color="#333")
+    ax.text(10.4, 0.15, "Bonus B wants all six reflectance bands, so B11 is downloaded too.",
+            ha="center", fontsize=10, color="#555")
 
     out = Path("docs/figures/cube.png")
     out.parent.mkdir(parents=True, exist_ok=True)

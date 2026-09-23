@@ -1,7 +1,7 @@
 """
 Burn Severity MCP Server
 ========================
-The burnsev pipeline (the notebook's code) as MCP tools, in the layout of
+The burnsev pipeline (the notebook's code) as MCP tools, following the conventions of
 eve-esa/mcp-tool-registry. The logic lives in ``burnsev.api``; this file only turns
 it into tools and JSON.
 

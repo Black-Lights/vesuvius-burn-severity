@@ -24,9 +24,3 @@ models/
 # OS
 Thumbs.db
 .DS_Store
-
-# private planning, never published
-CLAUDE.md
-PLAN.md
-install.log
-context/

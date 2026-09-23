@@ -68,6 +68,8 @@ The notebook ends step 9 with a plain-language summary written by the code from 
    pytest
    ```
 
+   The agent's tests run when the packages of step 3 are installed; without them pytest leaves them out.
+
 Steps 3 and 4 are optional: without them the notebook still runs top to bottom, and the bonus cells read the results saved in `outputs/` by the last live run.
 
 ## What is where
@@ -107,11 +109,11 @@ They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](
 
 ## Checks
 
-Every change went through a branch and a pull request. GitHub Actions runs ruff, 86 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+After the first commit, which set up the project, every change went through a branch and a pull request. GitHub Actions runs ruff, 86 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
 
 ## Bonus A: the pipeline as tools for a language model
 
-- `servers/burn_severity/server.py` is an MCP server in the layout of the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) (FastMCP, `mcp[cli]==1.27.0`, stdio or HTTP) with four tools: `find_fires` (EFFIS burnt areas), `list_scenes` (Sentinel-2 scenes), `assess_burn` (steps 3 to 10 for any fire) and `vegetation_change` (median NDVI in two periods and where it dropped). The logic is in `src/burnsev/api.py`; on this notebook's box and dates `assess_burn` returns the notebook's numbers.
+- `servers/burn_severity/server.py` is an MCP server following the conventions of the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) (FastMCP, `mcp[cli]==1.27.0`, async tools with docstrings, JSON results, stdio or HTTP) with four tools: `find_fires` (EFFIS burnt areas), `list_scenes` (Sentinel-2 scenes), `assess_burn` (steps 3 to 10 for any fire) and `vegetation_change` (median NDVI in two periods and where it dropped). The logic is in `src/burnsev/api.py`; on this notebook's box and dates `assess_burn` returns the notebook's numbers.
 - `agent/` is a LangGraph agent with the loop of EVE's `ReactAgent` and a `verify` node that finds every number of the answer in the tool results. Answers are written for a non-specialist or a specialist, and a conversation keeps its earlier turns.
 - The model is any chat model served in the OpenAI format, chosen in `.env` (see `.env.example`). DeepSeek V4.1 Flash, Kimi K3 and GPT-5.4 mini were tested. `LLM_PROVIDER=custom` points it at a self-hosted endpoint, such as EVE-Instruct behind an OpenAI-compatible server; that was not tested.
 

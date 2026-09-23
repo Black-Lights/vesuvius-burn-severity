@@ -226,6 +226,9 @@ def agreement_map(ours: xr.DataArray, ref: xr.DataArray, scores: dict[str, float
     return fig
 
 
+STEEP_COLOURS = {"low severity": "#fed976", "severe, gentler slope": "#fd8d3c", "severe and steep": "#800026"}
+
+
 def slope_and_fire(
     slope: xr.DataArray,
     fire: xr.DataArray,
@@ -233,37 +236,68 @@ def slope_and_fire(
     thresholds: tuple[float, ...],
     chosen: float,
 ) -> Figure:
-    """Left: slope in degrees over the box with the main fire outlined. Right: how the slope
-    inside the fire is distributed, severe and not severe, with the candidate thresholds.
+    """Left: slope over the box with the main fire outlined. Middle: the main fire split into
+    low severity, severe on gentler ground and severe and steep (at or above ``chosen``).
+    Right: the slope distribution inside the fire by severity, with the candidate thresholds.
     """
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(17, 6.5), gridspec_kw={"width_ratios": [1.2, 1]})
+    from matplotlib.colors import ListedColormap
+    from matplotlib.patches import Patch
+
+    fig, (ax1, ax2, ax3) = plt.subplots(
+        1, 3, figsize=(21, 6.5), gridspec_kw={"width_ratios": [1.15, 1, 1]}
+    )
     image = ax1.imshow(slope.values, cmap="magma_r", vmin=0, vmax=45)
     ax1.contour(fire.values.astype(float), levels=[0.5], colors="deepskyblue", linewidths=1.8)
     fig.colorbar(image, ax=ax1, shrink=0.8, label="slope (degrees)")
-    ax1.set_title("Slope from the Copernicus DEM on the 20 m grid; main fire in blue")
+    ax1.set_title("Slope on the 20 m grid; main fire in blue")
     ax1.set_axis_off()
+
     s = slope.values
-    bins = np.arange(0, 52, 2)
     in_fire = fire.values.astype(bool)
     sev = severe.values.astype(bool)
+    steep = s >= chosen
     ha = float(abs(slope.x[1] - slope.x[0])) ** 2 / 10_000
+    codes = np.full(s.shape, np.nan)
+    codes[in_fire & ~sev] = 0
+    codes[in_fire & sev & ~steep] = 1
+    codes[in_fire & sev & steep] = 2
+    rows, cols = np.nonzero(in_fire)
+    r0, r1 = max(rows.min() - 10, 0), rows.max() + 10
+    c0, c1 = max(cols.min() - 10, 0), cols.max() + 10
+    ax2.imshow(codes[r0:r1, c0:c1], cmap=ListedColormap(list(STEEP_COLOURS.values())),
+               vmin=0, vmax=2, interpolation="nearest")
+    areas = (
+        (in_fire & ~sev).sum() * ha,
+        (in_fire & sev & ~steep).sum() * ha,
+        (in_fire & sev & steep).sum() * ha,
+    )
+    handles = [
+        Patch(color=c, label=f"{name}: {a:,.0f} ha")
+        for (name, c), a in zip(STEEP_COLOURS.items(), areas)
+    ]
+    ax2.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=1,
+               title=f"steep = {chosen:.0f}° or more")
+    ax2.set_title("Main fire: severity against slope")
+    ax2.set_axis_off()
+
+    bins = np.arange(0, 52, 2)
     bottom = np.zeros(len(bins) - 1)
     for mask, label, colour in (
         (in_fire & sev, "severe (moderate-low and above)", "#b30000"),
         (in_fire & ~sev, "low severity", "#fec44f"),
     ):
         counts, _ = np.histogram(s[mask & ~np.isnan(s)], bins=bins)
-        ax2.bar(bins[:-1], counts * ha, bottom=bottom, width=2, align="edge", color=colour,
+        ax3.bar(bins[:-1], counts * ha, bottom=bottom, width=2, align="edge", color=colour,
                 edgecolor="white", linewidth=0.5, label=label)
         bottom += counts * ha
     for t in thresholds:
         style = "-" if t == chosen else "--"
-        ax2.axvline(t, color="black", linestyle=style, linewidth=1.8 if t == chosen else 1)
-        ax2.text(t, 1.01, f"{t:.0f}°", transform=ax2.get_xaxis_transform(), ha="center", va="bottom")
-    ax2.set_xlabel("slope (degrees)")
-    ax2.set_ylabel("hectares per 2° bin")
-    ax2.set_title("Slope inside the main fire, by severity", pad=24)
-    ax2.legend(loc="upper right")
-    ax2.grid(alpha=0.3)
+        ax3.axvline(t, color="black", linestyle=style, linewidth=1.8 if t == chosen else 1)
+        ax3.text(t, 1.01, f"{t:.0f}°", transform=ax3.get_xaxis_transform(), ha="center", va="bottom")
+    ax3.set_xlabel("slope (degrees)")
+    ax3.set_ylabel("hectares per 2° bin")
+    ax3.set_title("Slope inside the main fire, by severity", pad=24)
+    ax3.legend(loc="upper right")
+    ax3.grid(alpha=0.3)
     fig.tight_layout()
     return fig

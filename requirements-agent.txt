@@ -5,5 +5,4 @@ httpx>=0.27
 langgraph>=1.2,<2
 langchain-core>=0.3,<2
 langchain-openai>=0.3
-langchain-anthropic>=0.3
 langchain-mcp-adapters>=0.1

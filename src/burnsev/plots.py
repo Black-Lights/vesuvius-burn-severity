@@ -235,6 +235,30 @@ def index_history_and_dnbr(
     return fig
 
 
+def ndvi_before_after(before: xr.DataArray, after: xr.DataArray, burn: xr.DataArray) -> Figure:
+    """NDVI before and after the fire, the window medians, one above the other, with the outline
+    of the burn (dNBR > 0.27) on both.
+
+    Drawn in steps of 0.1 on the colour scale of the web map: each colour is a range that can be
+    read off the legend, and the picture stays a third of the size of a smooth one.
+    """
+    from matplotlib.colors import BoundaryNorm
+
+    steps = np.round(np.arange(0.0, 0.81, 0.1), 1)
+    cmap = plt.get_cmap(NDVI_COLOURS["cmap"], len(steps) + 1)
+    norm = BoundaryNorm(steps, cmap.N, extend="both")
+    fig, axes = plt.subplots(2, 1, figsize=(10, 18), layout="constrained")
+    for ax, ndvi, title in ((axes[0], before, "NDVI before: median 1 July to 7 August"),
+                            (axes[1], after, "NDVI after: median 13 August to 15 September")):
+        image = ax.imshow(ndvi.values, cmap=cmap, norm=norm, interpolation="nearest")
+        ax.contour(burn.values.astype(float), levels=[0.5], colors="firebrick", linewidths=0.8)
+        ax.set_title(title)
+        ax.set_axis_off()
+    fig.colorbar(image, ax=axes, orientation="horizontal", fraction=0.03, pad=0.02, aspect=40, ticks=steps,
+                 label="NDVI (pale = bare or burned ground, dark green = dense vegetation); red line: the burn")
+    return fig
+
+
 AGREEMENT_COLOURS = {"both": "#4d4d4d", "only ours": "#d7301f", "only EFFIS": "#2c7fb8"}
 
 
@@ -479,40 +503,42 @@ def _smooth_layer(name: str, da: xr.DataArray, colours: dict) -> WebLayer:
     return WebLayer(name, data_uri(rgba, "WEBP"), corners)
 
 
-def result_layers(
-    ndvi_before: xr.DataArray,
-    ndvi_after: xr.DataArray,
-    dnbr: xr.DataArray,
-    severity: xr.DataArray,
-    severe_steep: xr.DataArray,
-) -> list[WebLayer]:
-    """NDVI before and after (window medians, one colour scale), dNBR, the severity classes of the
-    main fire and the severe-and-steep ground, in the colours of steps 5, 6 and 8. Transparent where
-    there is nothing to show (unburned ground, outside the box), so the background stays visible."""
-    codes, corners = to_web(np.where(severity.values == 255, np.nan, severity.values), dnbr)
-    classes = np.zeros(codes.shape + (4,), dtype="uint8")
-    for code, colour in enumerate(SEVERITY_COLOURS[1:], start=1):  # 0, unburned, stays transparent
-        classes[codes == code] = _rgba(colour)
-
-    hit, _ = to_web(severe_steep.values, dnbr)
-    steep = np.zeros(hit.shape + (4,), dtype="uint8")
-    steep[hit == 1] = _rgba(STEEP_COLOURS["severe and steep"])
+def index_layers(ndvi_before: xr.DataArray, ndvi_after: xr.DataArray, dnbr: xr.DataArray) -> list[WebLayer]:
+    """NDVI before and after (window medians) and dNBR, in the colours of step 5. They cover the
+    whole box, so the map shows them as backgrounds: one at a time and opaque, so a colour always
+    means the same value, whatever lies underneath."""
     return [
         _smooth_layer("NDVI before (1 Jul to 7 Aug median)", ndvi_before, NDVI_COLOURS),
         _smooth_layer("NDVI after (13 Aug to 15 Sep median)", ndvi_after, NDVI_COLOURS),
         _smooth_layer("dNBR", dnbr, DNBR_COLOURS),
+    ]
+
+
+def class_layers(severity: xr.DataArray, severe_steep: xr.DataArray) -> list[WebLayer]:
+    """The severity classes of the main fire and the severe-and-steep ground, in the colours of
+    steps 6 and 8. Transparent where there is nothing to show (unburned ground, outside the box),
+    so they sit on top of any background."""
+    codes, corners = to_web(np.where(severity.values == 255, np.nan, severity.values), severity)
+    classes = np.zeros(codes.shape + (4,), dtype="uint8")
+    for code, colour in enumerate(SEVERITY_COLOURS[1:], start=1):  # 0, unburned, stays transparent
+        classes[codes == code] = _rgba(colour)
+
+    hit, _ = to_web(severe_steep.values, severity)
+    steep = np.zeros(hit.shape + (4,), dtype="uint8")
+    steep[hit == 1] = _rgba(STEEP_COLOURS["severe and steep"])
+    return [
         WebLayer("severity classes, main fire", data_uri(classes, "PNG"), corners, shown=True),
         WebLayer("severe and steep ground", data_uri(steep, "PNG"), corners),
     ]
 
 
-def interactive_map(perimeter_file, cells_file, pictures=(), layers=(), effis=()):
+def interactive_map(perimeter_file, cells_file, backgrounds=(), layers=(), effis=()):
     """A small web map drawn from the written files and the layers of the notebook.
 
-    Backgrounds, one at a time: satellite, streets, and the ``pictures`` of step 4, so one click
-    goes from before to after. On top, each switched on and off: the raster ``layers``, the
-    ``effis`` burnt-area polygons as dashed outlines, the flagged cells coloured by priority with
-    their numbers on hover, and the main fire outline.
+    Backgrounds, one at a time: satellite, streets, and the images in ``backgrounds`` (the
+    pictures of step 4, NDVI, dNBR), so one click goes from before to after. On top, each switched
+    on and off: the class ``layers``, the ``effis`` burnt-area polygons as dashed outlines, the
+    flagged cells coloured by priority with their numbers on hover, and the main fire outline.
 
     Interactive in Jupyter, VS Code and Colab; GitHub does not run it, so the notebook also keeps
     the static priority map.
@@ -527,7 +553,7 @@ def interactive_map(perimeter_file, cells_file, pictures=(), layers=(), effis=()
                       control_scale=True)
     folium.TileLayer("Esri.WorldImagery", name="satellite (Esri)").add_to(fmap)
     folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)").add_to(fmap)
-    for layer in pictures:  # overlay=False: a background, chosen with the radio buttons
+    for layer in backgrounds:  # overlay=False: a background, chosen with the radio buttons
         folium.raster_layers.ImageOverlay(layer.url, layer.corners, name=layer.name, overlay=False,
                                           show=False).add_to(fmap)
     for layer in layers:

@@ -55,8 +55,7 @@ def draw_layer(ax, image, x0, y0, width, shear, cmap="gray", vmin=0, vmax=1, edg
                     interpolation="bilinear", origin="upper")
     art.set_transform(trans + ax.transData)
     corners = trans.transform([[0, 0], [width, 0], [width, height], [0, height]])
-    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor="white", linewidth=6))
-    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=1.4))
+    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=1.2))
     return trans
 
 
@@ -85,7 +84,7 @@ def main() -> Path:
     ax.text(11.2, 7.55, "Seven such stacks, one per band", ha="center", fontsize=TITLE, weight="bold")
 
     # Left: the big stack, oldest at the bottom, one pixel followed through it.
-    width, shear, step, x0, y0 = 3.0, 1.4, 1.3, 1.5, 0.95
+    width, shear, step, x0, y0 = 3.8, 1.5, 0.95, 1.3, 1.0
     marks = []
     for k, day in enumerate(STACK_DATES):
         trans = draw_layer(ax, grey(refl["B12"].sel(time=day).squeeze("time").values),
@@ -103,7 +102,7 @@ def main() -> Path:
             ha="center", fontsize=SMALL, color="#555")
 
     # Right: a small stack per band, the same two dates in each.
-    swidth, sshear, sstep = 1.35, 0.5, 0.65
+    swidth, sshear, sstep = 1.35, 0.5, 0.34
     positions = [(7.7, 5.0), (9.5, 5.0), (11.3, 5.0), (13.1, 5.0), (8.6, 2.0), (10.4, 2.0), (12.2, 2.0)]
     for (band, meaning, job), (sx, sy) in zip(BANDS, positions):
         for k, day in enumerate(SMALL_DATES):

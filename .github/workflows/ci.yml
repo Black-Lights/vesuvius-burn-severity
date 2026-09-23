@@ -17,7 +17,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -r requirements.txt -r requirements-dev.txt -e .
+        run: pip install -r requirements.txt -r requirements-jupyter.txt -r requirements-dev.txt -e .
 
       - name: Lint
         run: ruff check .
@@ -42,7 +42,7 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install -r requirements.txt -e .
+        run: pip install -r requirements.txt -r requirements-jupyter.txt -e .
 
       - name: Execute the notebook on a fresh machine
         run: >

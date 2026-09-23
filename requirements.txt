@@ -1,4 +1,5 @@
-# Core pipeline: STAC search, COG reads, indices, raster/vector outputs, notebook.
+# Core pipeline: STAC search, COG reads, indices, raster/vector outputs. These are the package's
+# dependencies; the tools to run the notebook are in requirements-jupyter.txt.
 # Python 3.12. Exact versions are frozen in requirements.lock.txt after install.
 pystac-client>=0.8
 planetary-computer>=1.0
@@ -17,8 +18,4 @@ folium>=0.17
 rio-cogeo>=5.3
 requests>=2.32
 python-dotenv>=1.0
-jupyter>=1.1
-ipykernel>=6.29
-nbformat>=5.10
-nbconvert>=7.16
 netCDF4>=1.6

@@ -118,6 +118,15 @@ def offsets_by_day(items: list[pystac.Item]) -> dict[str, int]:
     return out
 
 
+def orbits_by_day(items: list[pystac.Item]) -> dict[str, set[int]]:
+    """Map each acquisition date (ISO string) to the relative orbits that saw the box that day."""
+    out: dict[str, set[int]] = {}
+    for item in items:
+        day = item.datetime.date().isoformat()
+        out.setdefault(day, set()).add(int(item.properties["sat:relative_orbit"]))
+    return out
+
+
 def search_dem(bbox: tuple[float, float, float, float]) -> list[pystac.Item]:
     """Copernicus DEM GLO-30 tiles covering the bbox (usually one)."""
     catalog = open_catalog()

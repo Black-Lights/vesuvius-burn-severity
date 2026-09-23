@@ -23,7 +23,11 @@ POST_WINDOW = ("2025-08-13", "2025-10-15")
 # the per-pixel SCL mask does the real work, and a 25% scene can be clear over the AOI.
 MAX_CLOUD = 25.0
 
-# Bands: blue, green, red (10 m), NIR narrow, SWIR1, SWIR2 (20 m), scene classification (20 m).
+# Bands, each with a job: B02, B03, B04 (blue, green, red, 10 m) for the pictures; B8A (near
+# infrared) and B12 (short-wave infrared 2), both 20 m, for the burn index; SCL, the scene
+# classification (20 m), for the cloud mask. B11 (short-wave infrared 1, 20 m) is not used by
+# the core: the foundation model in bonus B expects the six Harmonized Landsat Sentinel bands
+# (B02, B03, B04, B8A, B11, B12), so it is downloaded once with the others.
 BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12", "SCL"]
 
 # Working resolution in metres. NBR needs B8A and B12, both native 20 m, so the cube is

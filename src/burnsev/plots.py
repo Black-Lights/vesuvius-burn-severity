@@ -42,6 +42,35 @@ def to_rgb(
     return np.dstack(layers)
 
 
+def usable_share(refl: xr.Dataset, orbits: dict[str, set[int]], fire: tuple[str, str]) -> Figure:
+    """Share of the box that is usable on each date, in percent, coloured by the orbit that saw it.
+
+    ``orbits`` maps each date to the relative orbits of its products (two when both orbits
+    passed the same day). Fire days are shaded.
+    """
+    share = refl["valid_fraction"].to_pandas() * 100
+    labels = {}
+    for day in share.index:
+        seen = orbits[str(day.date())]
+        labels[day] = "both orbits" if len(seen) > 1 else f"orbit {next(iter(seen))}"
+    colours = {"orbit 79": "tab:blue", "orbit 122": "tab:purple", "both orbits": "tab:green"}
+    fig, ax = plt.subplots(figsize=(12, 3.8))
+    ax.plot(share.index, share.values, color="lightgrey", zorder=1)
+    for label, colour in colours.items():
+        days = [d for d in share.index if labels[d] == label]
+        if days:
+            ax.scatter(days, share[days], color=colour, label=label, zorder=2)
+    ax.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.5, label="fire")
+    ax.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax.set_xlabel("2025")
+    ax.set_ylabel("usable share of the box (%)")
+    ax.set_ylim(0, 105)
+    ax.legend(loc="lower right", ncol=4)
+    fig.tight_layout()
+    return fig
+
+
 def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
     """Two rows (true colour, short-wave infrared colour) by two dates, one stretch per band.
 

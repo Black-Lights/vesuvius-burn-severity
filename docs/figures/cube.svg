@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480" viewBox="0 0 960 480" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#222">
+  <rect width="960" height="480" fill="#ffffff"/>
+
+  <!-- ===== left: one band = a stack of dated images ===== -->
+  <text x="230" y="32" text-anchor="middle" font-size="16" font-weight="bold">One band, for example B12: 46 dated images in a stack</text>
+
+  <g stroke="#5b6b7c" stroke-width="1.2">
+    <polygon points="80,400 310,400 380,320 150,320" fill="#e8eef5"/>
+    <polygon points="80,370 310,370 380,290 150,290" fill="#e8eef5"/>
+    <polygon points="80,340 310,340 380,260 150,260" fill="#e8eef5"/>
+    <polygon points="80,310 310,310 380,230 150,230" fill="#f3f6fa"/>
+    <polygon points="80,280 310,280 380,200 150,200" fill="#e8eef5"/>
+    <polygon points="80,250 310,250 380,170 150,170" fill="#d9e4f0"/>
+  </g>
+
+  <!-- dates, one per image -->
+  <g text-anchor="end" font-size="13">
+    <text x="72" y="394">5 Jun</text>
+    <text x="72" y="364">7 Jun</text>
+    <text x="72" y="334">8 Jun</text>
+    <text x="72" y="304">. . .</text>
+    <text x="72" y="274">11 Oct</text>
+    <text x="72" y="244">13 Oct</text>
+  </g>
+  <text x="72" y="200" text-anchor="end" font-size="13" fill="#555">46 dates</text>
+  <text x="72" y="216" text-anchor="end" font-size="13" fill="#555">in total</text>
+
+  <!-- one pixel followed through the stack -->
+  <rect x="225" y="205" width="10" height="10" fill="#c0392b"/>
+  <line x1="230" y1="215" x2="230" y2="380" stroke="#c0392b" stroke-width="1.5" stroke-dasharray="4,3"/>
+  <rect x="225" y="380" width="10" height="10" fill="#c0392b"/>
+  <text x="242" y="212" font-size="13" fill="#c0392b">the same pixel on every date</text>
+
+  <text x="230" y="430" text-anchor="middle" font-size="13">Follow the red pixel down the stack: 46 numbers.</text>
+  <text x="230" y="448" text-anchor="middle" font-size="13">The median is the middle one of them.</text>
+  <text x="230" y="468" text-anchor="middle" font-size="13" fill="#555">Each image: 637 by 560 pixels of 20 m, so 356,720 pixels.</text>
+
+  <!-- ===== right: seven stacks, one per band ===== -->
+  <text x="700" y="32" text-anchor="middle" font-size="16" font-weight="bold">Seven such stacks, one per band</text>
+
+  <g stroke="#5b6b7c" stroke-width="1">
+    <g fill="#dbe9ff">
+      <polygon points="452,140 508,140 526,118 470,118"/><polygon points="452,130 508,130 526,108 470,108"/><polygon points="452,120 508,120 526,98 470,98"/>
+    </g>
+    <g fill="#dcf3dc">
+      <polygon points="587,140 643,140 661,118 605,118"/><polygon points="587,130 643,130 661,108 605,108"/><polygon points="587,120 643,120 661,98 605,98"/>
+    </g>
+    <g fill="#fbdcdc">
+      <polygon points="722,140 778,140 796,118 740,118"/><polygon points="722,130 778,130 796,108 740,108"/><polygon points="722,120 778,120 796,98 740,98"/>
+    </g>
+    <g fill="#f6e3d2">
+      <polygon points="857,140 913,140 931,118 875,118"/><polygon points="857,130 913,130 931,108 875,108"/><polygon points="857,120 913,120 931,98 875,98"/>
+    </g>
+    <g fill="#efe4f8">
+      <polygon points="502,290 558,290 576,268 520,268"/><polygon points="502,280 558,280 576,258 520,258"/><polygon points="502,270 558,270 576,248 520,248"/>
+    </g>
+    <g fill="#e2d2f2">
+      <polygon points="672,290 728,290 746,268 690,268"/><polygon points="672,280 728,280 746,258 690,258"/><polygon points="672,270 728,270 746,248 690,248"/>
+    </g>
+    <g fill="#e6e6e6">
+      <polygon points="842,290 898,290 916,268 860,268"/><polygon points="842,280 898,280 916,258 860,258"/><polygon points="842,270 898,270 916,248 860,248"/>
+    </g>
+  </g>
+
+  <g text-anchor="middle">
+    <text x="489" y="164" font-weight="bold">B02</text><text x="489" y="182" font-size="13">blue</text><text x="489" y="200" font-size="13" fill="#666">pictures</text>
+    <text x="624" y="164" font-weight="bold">B03</text><text x="624" y="182" font-size="13">green</text><text x="624" y="200" font-size="13" fill="#666">pictures</text>
+    <text x="759" y="164" font-weight="bold">B04</text><text x="759" y="182" font-size="13">red</text><text x="759" y="200" font-size="13" fill="#666">pictures</text>
+    <text x="894" y="164" font-weight="bold">B8A</text><text x="894" y="182" font-size="13">near infrared</text><text x="894" y="200" font-size="13" fill="#666">burn index</text>
+
+    <text x="539" y="314" font-weight="bold">B11</text><text x="539" y="332" font-size="13">short-wave IR 1</text><text x="539" y="350" font-size="13" fill="#666">bonus B model only</text>
+    <text x="709" y="314" font-weight="bold">B12</text><text x="709" y="332" font-size="13">short-wave IR 2</text><text x="709" y="350" font-size="13" fill="#666">burn index</text>
+    <text x="879" y="314" font-weight="bold">SCL</text><text x="879" y="332" font-size="13">scene classes</text><text x="879" y="350" font-size="13" fill="#666">cloud mask</text>
+  </g>
+
+  <text x="700" y="430" text-anchor="middle" font-size="13">NBR uses B8A and B12. The pictures use B02, B03 and B04.</text>
+  <text x="700" y="448" text-anchor="middle" font-size="13">SCL says which pixels are cloud, shadow or missing.</text>
+  <text x="700" y="468" text-anchor="middle" font-size="13" fill="#555">Bonus B wants all six reflectance bands, so B11 is downloaded too.</text>
+</svg>

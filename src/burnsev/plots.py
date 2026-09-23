@@ -95,18 +95,34 @@ def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
 
 
 SEVERITY_COLOURS = ["#eef3ea", "#ffffb2", "#fd8d3c", "#e31a1c", "#67000d"]  # unburned to high
+EXCLUDED_GREY = "#8c8c8c"
 
 
-def severity_map(severity: xr.DataArray, areas: dict[str, float]) -> Figure:
-    """The class raster in the usual burn-severity colours, with hectares per class in the legend."""
+def severity_map(
+    severity: xr.DataArray, areas: dict[str, float], excluded: xr.DataArray | None = None
+) -> Figure:
+    """The class raster in the usual burn-severity colours, hectares per class in the legend.
+
+    ``excluded`` marks burned pixels left out of the analysis (outside the main fire); they are
+    drawn grey with their total, so what was dropped stays visible.
+    """
     from matplotlib.colors import ListedColormap
     from matplotlib.patches import Patch
 
-    names = list(areas)
+    areas = dict(areas)
     fig, ax = plt.subplots(figsize=(9, 8))
-    shown = severity.where(severity != 255).values  # no data drawn white
-    ax.imshow(shown, cmap=ListedColormap(SEVERITY_COLOURS), vmin=0, vmax=4, interpolation="nearest")
-    handles = [Patch(color=c, label=f"{n}: {areas[n]:,.0f} ha") for n, c in zip(names, SEVERITY_COLOURS)]
+    shown = severity.where(severity != 255).values.astype(float)  # no data drawn white
+    extra = []
+    if excluded is not None:
+        shown[excluded.values] = 5
+        ha = float(excluded.sum()) * float(abs(severity.x[1] - severity.x[0])) ** 2 / 10_000
+        areas["unburned"] = areas.get("unburned", 0.0) - ha  # the grey pixels get their own entry
+        extra = [Patch(color=EXCLUDED_GREY, label=f"outside the main fire: {ha:,.0f} ha")]
+    handles = [
+        Patch(color=c, label=f"{n}: {areas[n]:,.0f} ha") for n, c in zip(areas, SEVERITY_COLOURS)
+    ] + extra
+    colours = ListedColormap([*SEVERITY_COLOURS, EXCLUDED_GREY])
+    ax.imshow(shown, cmap=colours, vmin=0, vmax=5, interpolation="nearest")
     ax.legend(handles=handles, loc="lower left", title="dNBR class, Key and Benson (2006)")
     ax.set_title("Burn severity class per 20 m pixel")
     ax.set_axis_off()
@@ -114,8 +130,19 @@ def severity_map(severity: xr.DataArray, areas: dict[str, float]) -> Figure:
     return fig
 
 
-def nbr_history_and_dnbr(
+def _area_means(ax, index: xr.DataArray, masks, min_usable: float) -> None:
+    """One line per area: the mean of ``index`` over the area on each date that is usable enough."""
+    for mask, label, colour in masks:
+        sub = index.where(mask)
+        usable = sub.notnull().sum(("y", "x")) / int(mask.sum())
+        series = sub.mean(("y", "x")).where(usable >= min_usable).to_pandas().dropna()
+        ax.plot(series.index, series.values, marker="o", markersize=7, linewidth=2, color=colour,
+                label=label)
+
+
+def index_history_and_dnbr(
     nbr: xr.DataArray,
+    ndvi: xr.DataArray,
     dnbr: xr.DataArray,
     burn: xr.DataArray,
     pre: tuple[str, str],
@@ -123,40 +150,42 @@ def nbr_history_and_dnbr(
     fire: tuple[str, str],
     min_usable: float = 0.5,
 ) -> Figure:
-    """Left: mean NBR per date inside the burn and over the unburned rest of the box, with the
-    two windows and the fire days shaded. Right: the dNBR map.
+    """Left: mean NBR (top) and mean NDVI (bottom) per date inside the burn and over the
+    unburned rest of the box, with the two windows and the fire days shaded. Right: the dNBR map.
 
     A date enters a line only if at least ``min_usable`` of that area is usable on it; the
     orbit that sees only the west of the box would otherwise produce meaningless means.
     """
     unburned = (abs(dnbr) < 0.1) & dnbr.notnull()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(17, 6), gridspec_kw={"width_ratios": [1.5, 1]})
-    lines = (
+    masks = (
         (burn, "burned area (dNBR > 0.27)", "firebrick"),
         (unburned, "unburned area (dNBR within 0.1 of zero)", "seagreen"),
     )
-    for mask, label, colour in lines:
-        sub = nbr.where(mask)
-        usable = sub.notnull().sum(("y", "x")) / int(mask.sum())
-        series = sub.mean(("y", "x")).where(usable >= min_usable).to_pandas().dropna()
-        ax1.plot(series.index, series.values, marker="o", markersize=7, linewidth=2, color=colour,
-                 label=label)
-    top = ax1.get_ylim()[1]
-    for (a, b), name in ((pre, "pre-fire window"), (post, "post-fire window")):
-        ax1.axvspan(pd.Timestamp(a), pd.Timestamp(b), color="grey", alpha=0.12)
-        ax1.text(pd.Timestamp(a) + (pd.Timestamp(b) - pd.Timestamp(a)) / 2, top, name,
-                 ha="center", va="top", color="#444")
-    ax1.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.6, label="fire")
-    ax1.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    ax1.set_xlabel("2025")
-    ax1.set_ylabel("mean NBR over the area")
-    ax1.set_title(f"Mean NBR per date (dates with at least {min_usable:.0%} of the area usable)")
-    ax1.grid(alpha=0.3)
-    ax1.legend(loc="lower left")
-    image = ax2.imshow(dnbr.values, cmap="RdYlGn_r", vmin=-0.3, vmax=0.9)
-    fig.colorbar(image, ax=ax2, shrink=0.8, label="dNBR (red = vegetation lost)")
-    ax2.set_title("dNBR map: pre-fire median minus post-fire median")
-    ax2.set_axis_off()
+    fig = plt.figure(figsize=(17, 10))
+    grid = fig.add_gridspec(2, 2, width_ratios=[1.5, 1])
+    ax_nbr = fig.add_subplot(grid[0, 0])
+    ax_ndvi = fig.add_subplot(grid[1, 0], sharex=ax_nbr)
+    ax_map = fig.add_subplot(grid[:, 1])
+    for ax, index, name in ((ax_nbr, nbr, "NBR"), (ax_ndvi, ndvi, "NDVI")):
+        _area_means(ax, index, masks, min_usable)
+        top = ax.get_ylim()[1]
+        for (a, b), label in ((pre, "pre-fire window"), (post, "post-fire window")):
+            ax.axvspan(pd.Timestamp(a), pd.Timestamp(b), color="grey", alpha=0.12)
+            ax.text(pd.Timestamp(a) + (pd.Timestamp(b) - pd.Timestamp(a)) / 2, top, label,
+                    ha="center", va="top", color="#444")
+        ax.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.6,
+                   label="fire")
+        ax.set_ylabel(f"mean {name} over the area")
+        ax.grid(alpha=0.3)
+    ax_nbr.set_title(f"Mean index per date (dates with at least {min_usable:.0%} of the area usable)")
+    ax_nbr.legend(loc="lower left")
+    ax_nbr.tick_params(labelbottom=False)
+    ax_ndvi.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
+    ax_ndvi.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
+    ax_ndvi.set_xlabel("2025")
+    image = ax_map.imshow(dnbr.values, cmap="RdYlGn_r", vmin=-0.3, vmax=0.9)
+    fig.colorbar(image, ax=ax_map, shrink=0.6, label="dNBR (red = vegetation lost)")
+    ax_map.set_title("dNBR map: pre-fire median minus post-fire median")
+    ax_map.set_axis_off()
     fig.tight_layout()
     return fig

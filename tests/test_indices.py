@@ -50,3 +50,31 @@ def test_dnbr_is_positive_where_nbr_dropped():
     da = _series([0.3, 0.5, -0.1, -0.1], ["2025-06-01", "2025-06-10", "2025-08-20", "2025-09-01"])
     out = indices.dnbr(da, ("2025-06-01", "2025-06-30"), ("2025-08-13", "2025-09-30"))
     assert out.item() == pytest.approx(0.4 - (-0.1))
+
+
+def test_ndvi_uses_near_infrared_and_red():
+    ds = xr.Dataset(
+        {
+            "B8A": xr.DataArray([[0.4]], dims=("y", "x")),
+            "B04": xr.DataArray([[0.1]], dims=("y", "x")),
+        }
+    )
+    assert indices.ndvi(ds).item() == pytest.approx(0.3 / 0.5)
+
+
+def test_main_fire_keeps_the_largest_patch_including_diagonals():
+    sev = xr.DataArray(
+        np.array(
+            [
+                [2, 0, 0, 0, 1],
+                [0, 3, 0, 0, 0],
+                [0, 0, 4, 0, 0],
+                [0, 0, 0, 0, 255],
+            ],
+            dtype="uint8",
+        ),
+        dims=("y", "x"),
+    )
+    keep = indices.main_fire(sev).values
+    assert keep.sum() == 3  # the diagonal of three, not the lone pixel top right
+    assert keep[0, 0] and keep[2, 2] and not keep[0, 4]

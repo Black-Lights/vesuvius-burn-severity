@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import xarray as xr
+from scipy import ndimage
 
 from . import aoi
 
@@ -21,6 +22,16 @@ def nbr(ds: xr.Dataset) -> xr.DataArray:
     infrared (B12), so NBR is high. Burned ground is the reverse, so NBR drops after a fire.
     """
     return normalised_difference(ds["B8A"], ds["B12"]).rename("NBR")
+
+
+def ndvi(ds: xr.Dataset) -> xr.DataArray:
+    """Normalised Difference Vegetation Index, (B8A - B04) / (B8A + B04), per pixel and date.
+
+    NBR reacts to char and ash through the short-wave infrared; NDVI reacts to green leaf
+    through the red band. After a fire it measures the cover left to hold the soil. B8A (the
+    narrow near-infrared band) is used instead of the 10 m B08 so both indices share the 20 m grid.
+    """
+    return normalised_difference(ds["B8A"], ds["B04"]).rename("NDVI")
 
 
 def window_median(da: xr.DataArray, start: str, end: str) -> xr.DataArray:
@@ -59,6 +70,21 @@ def severity_class(dnbr_da: xr.DataArray) -> xr.DataArray:
     codes = np.digitize(dnbr_da.values, breaks).astype("uint8")
     codes[np.isnan(dnbr_da.values)] = 255
     return dnbr_da.copy(data=codes).rename("severity")
+
+
+def main_fire(sev: xr.DataArray) -> xr.DataArray:
+    """True on the largest connected patch of burned pixels (class low or above).
+
+    Connected includes diagonal neighbours. The small patches elsewhere in the box also pass
+    the dNBR breaks, but they are harvested fields, other small fires and cloud edges, not this
+    fire; one fire is one perimeter.
+    """
+    burned = (sev.values >= 1) & (sev.values != 255)
+    labels, n = ndimage.label(burned, structure=np.ones((3, 3), dtype=bool))
+    if n == 0:
+        return sev.copy(data=np.zeros(sev.shape, dtype=bool)).rename("main_fire")
+    sizes = ndimage.sum(burned, labels, range(1, n + 1))
+    return sev.copy(data=labels == int(np.argmax(sizes)) + 1).rename("main_fire")
 
 
 def class_names() -> dict[int, str]:

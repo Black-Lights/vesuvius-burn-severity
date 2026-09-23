@@ -48,14 +48,15 @@ def layer_transform(x0: float, y0: float, width: float, shear: float) -> Affine2
     return Affine2D().scale(1, FLATTEN).skew(np.arctan(shear / (height * FLATTEN)), 0).translate(x0, y0)
 
 
-def draw_layer(ax, image, x0, y0, width, shear, cmap="gray", vmin=0, vmax=1, edge="#5b6b7c"):
+def draw_layer(ax, image, x0, y0, width, shear, z=1, cmap="gray", vmin=0, vmax=1, edge="#5b6b7c"):
     height = width * ASPECT
     trans = layer_transform(x0, y0, width, shear)
     art = ax.imshow(image, extent=[0, width, 0, height], cmap=cmap, vmin=vmin, vmax=vmax,
                     interpolation="bilinear", origin="upper")
     art.set_transform(trans + ax.transData)
+    art.set_zorder(z)  # image and outline of one plate are drawn together, above lower plates
     corners = trans.transform([[0, 0], [width, 0], [width, height], [0, height]])
-    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=1.2))
+    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=1.2, zorder=z + 0.5))
     return trans
 
 
@@ -88,13 +89,13 @@ def main() -> Path:
     marks = []
     for k, day in enumerate(STACK_DATES):
         trans = draw_layer(ax, grey(refl["B12"].sel(time=day).squeeze("time").values),
-                           x0, y0 + k * step, width, shear)
+                           x0, y0 + k * step, width, shear, z=2 + 2 * k)
         ax.text(x0 - 0.15, y0 + k * step + 0.08, f"{int(day[8:])} {MONTH[int(day[5:7]) - 1]}",
                 ha="right", va="bottom", fontsize=LABEL)
         marks.append(pixel_xy(trans, col, row, width))
     (xb, yb), (xt, yt) = marks[0], marks[-1]
-    ax.plot([xb, xt], [yb, yt], linestyle="--", color="#c0392b", linewidth=2)
-    ax.plot([xb, xt], [yb, yt], "s", color="#c0392b", markersize=8)
+    ax.plot([xb, xt], [yb, yt], linestyle="--", color="#c0392b", linewidth=2, zorder=50)
+    ax.plot([xb, xt], [yb, yt], "s", color="#c0392b", markersize=8, zorder=51)
     ax.text(x0 + width + shear + 0.15, yb, "red: the same\npixel on every date", color="#c0392b",
             fontsize=LABEL, ha="left", va="center")
     ax.text(3.6, 0.5, "Follow the red pixel down the stack: 46 numbers.", ha="center", fontsize=SMALL)
@@ -108,10 +109,11 @@ def main() -> Path:
         for k, day in enumerate(SMALL_DATES):
             if band == "SCL":
                 image = dn["SCL"].sel(time=day).squeeze("time").values
-                draw_layer(ax, image, sx, sy + k * sstep, swidth, sshear, cmap=SCL_COLOURS, vmin=0, vmax=11)
+                draw_layer(ax, image, sx, sy + k * sstep, swidth, sshear, z=2 + 2 * k,
+                           cmap=SCL_COLOURS, vmin=0, vmax=11)
             else:
                 draw_layer(ax, grey(refl[band].sel(time=day).squeeze("time").values),
-                           sx, sy + k * sstep, swidth, sshear)
+                           sx, sy + k * sstep, swidth, sshear, z=2 + 2 * k)
         cx = sx + (swidth + sshear) / 2
         ax.text(cx, sy - 0.32, band, ha="center", fontsize=LABEL + 1, weight="bold")
         ax.text(cx, sy - 0.62, meaning, ha="center", fontsize=SMALL)

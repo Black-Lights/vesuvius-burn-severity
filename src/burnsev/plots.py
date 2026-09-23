@@ -236,15 +236,16 @@ def slope_and_fire(
     thresholds: tuple[float, ...],
     chosen: float,
 ) -> Figure:
-    """Left: slope over the box with the main fire outlined. Middle: the main fire split into
-    low severity, severe on gentler ground and severe and steep (at or above ``chosen``).
-    Right: the slope distribution inside the fire by severity, with the candidate thresholds.
+    """Three panels, one above the other. Top: slope over the box with the main fire outlined.
+    Middle: the main fire split into low severity, severe on gentler ground and severe and steep
+    (at or above ``chosen``). Bottom: the slope distribution inside the fire by severity, with
+    the candidate thresholds.
     """
     from matplotlib.colors import ListedColormap
     from matplotlib.patches import Patch
 
     fig, (ax1, ax2, ax3) = plt.subplots(
-        1, 3, figsize=(21, 6.5), gridspec_kw={"width_ratios": [1.15, 1, 1]}
+        3, 1, figsize=(13, 27), gridspec_kw={"height_ratios": [1.15, 1, 0.75]}
     )
     image = ax1.imshow(slope.values, cmap="magma_r", vmin=0, vmax=45)
     ax1.contour(fire.values.astype(float), levels=[0.5], colors="deepskyblue", linewidths=1.8)
@@ -275,7 +276,7 @@ def slope_and_fire(
         Patch(color=c, label=f"{name}: {a:,.0f} ha")
         for (name, c), a in zip(STEEP_COLOURS.items(), areas)
     ]
-    ax2.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=1,
+    ax2.legend(handles=handles, loc="center left", bbox_to_anchor=(1.0, 0.5),
                title=f"steep = {chosen:.0f}° or more")
     ax2.set_title("Main fire: severity against slope")
     ax2.set_axis_off()

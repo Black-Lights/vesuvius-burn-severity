@@ -24,12 +24,18 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import sys
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
 # Importing burnsev also removes a system-wide PROJ_LIB before rasterio loads (see its __init__).
 from burnsev import api
+
+# The pipeline reads data/reference and writes data/cache relative to the repository, whichever
+# folder the client starts the server from (an agent, the MCP Inspector, Claude Code).
+os.chdir(Path(__file__).resolve().parents[2])
 
 logging.basicConfig(
     level=logging.INFO,

@@ -94,3 +94,46 @@ def test_numbers_written_as_words_are_checked_too():
     found = [(shown, value) for shown, value, _ in numbers("Twenty more squares; twenty-two of them in one block.")]
     assert found == [("Twenty", 20.0), ("twenty-two", 22.0)]  # "one" is too common to count
     assert check("Twenty more squares come next.", ['{"priority_2_cells": 19}'])["not_found"] == ["Twenty"]
+
+
+def test_a_follow_up_can_quote_the_first_turn():
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    replies = [_call("assess_burn", ARGS), AIMessage("The fire burned 737 ha."),
+               AIMessage("Of those, 576 ha burned severely.")]  # no new tool call: 576 is from turn one
+    graph = build_graph(ScriptedModel(replies=replies), [assess_burn], checkpointer=InMemorySaver())
+    config = {"configurable": {"thread_id": "t1"}}
+    turn = {"checks": 0, "not_found": []}
+    asyncio.run(graph.ainvoke({"messages": [HumanMessage("How much burned?")], **turn}, config))
+    state = asyncio.run(graph.ainvoke({"messages": [HumanMessage("And how much of it severely?")], **turn}, config))
+    assert state["not_found"] == [] and state["checks"] == 0
+    assert [m.content for m in state["messages"] if isinstance(m, HumanMessage)] == [
+        "How much burned?", "And how much of it severely?"]
+
+
+def test_settings_ignore_an_inline_comment(monkeypatch):
+    from agent.settings import setting
+
+    monkeypatch.setenv("LLM_MODEL", "   # optional override")
+    monkeypatch.setenv("LLM_PROVIDER", "kimi   # deepseek | kimi | openai")
+    assert setting("LLM_MODEL") is None and setting("LLM_PROVIDER") == "kimi"
+
+
+def test_the_notebook_replays_the_saved_run_without_a_key(tmp_path, monkeypatch):
+    from agent import notebook
+
+    saved = {"recorded": "2026-09-23", "turns": []}
+    (tmp_path / "runs.json").write_text(json.dumps(saved), encoding="utf-8")
+    monkeypatch.setattr(notebook, "why_not_live", lambda provider=None: "no API key for deepseek in .env")
+    record = asyncio.run(notebook.run_or_replay([("public", ["any question"])], tmp_path / "runs.json"))
+    assert record["replayed"] and record["recorded"] == "2026-09-23"
+
+
+def test_brief_names_the_numbers_of_a_burn_assessment():
+    from agent.notebook import brief
+
+    result = {"pre_fire_window": "2025-07-01 to 2025-08-07", "post_fire_window": "2025-08-13 to 2025-09-15",
+              "burned_ha": 737, "severe_ha": 576, "severe_and_steep_ha": 177, "priority_1_cells": 24,
+              "priority_1_ha": 110, "priority_2_cells": 16, "elevation_model": "TINITALY 1.1, 10 m", "warnings": []}
+    line = brief("assess_burn", json.dumps(result))
+    assert "737 ha burned" in line and "24 first-priority cells (110 ha)" in line

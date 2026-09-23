@@ -48,6 +48,7 @@ The first run downloads the Sentinel-2 pixels from Microsoft Planetary Computer,
 | 9. The decision: ranked cells, sensitivity, summary | `src/burnsev/decision.py` |
 | 10. Files written and checked, interactive map | `src/burnsev/export.py` |
 | 11. Limitations and next steps | notebook only |
+| Bonus A. The pipeline as MCP tools, and an agent | `servers/burn_severity/`, `src/burnsev/api.py`, `agent/` |
 
 The notebook shows the source of the functions that carry the science next to the cells that call them.
 
@@ -58,12 +59,26 @@ In `outputs/`, all reopened and checked by the notebook:
 - `dnbr_20m.tif`, `severity_20m.tif`: Cloud-Optimised GeoTIFF, EPSG:32633, 20 m. The severity raster carries its colour table.
 - `main_fire_perimeter.geojson`, `priority_cells.geojson` (159 ranked cells), `alert_cells.geojson` (the 40 flagged cells): GeoJSON in longitude and latitude.
 - `before_after.png`, `priority_map.png`.
+- `agent_runs.json`, `agent_models.json`: the saved runs of bonus A (three conversations; one question to three models), replayed when no model key is set.
 
 They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](https://geojson.io).
 
 ## Checks
 
-Every change went through a branch and a pull request. GitHub Actions runs ruff, 42 unit tests on small synthetic arrays with no network, a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+Every change went through a branch and a pull request. GitHub Actions runs ruff, 74 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+
+## Bonus A: the pipeline as tools for a language model
+
+- `servers/burn_severity/server.py` is an MCP server in the layout of the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) (FastMCP, `mcp[cli]==1.27.0`, stdio or HTTP) with four tools: `find_fires` (EFFIS burnt areas), `list_scenes` (Sentinel-2 scenes), `assess_burn` (steps 3 to 10 for any fire) and `vegetation_change` (median NDVI in two periods and where it dropped). The logic is in `src/burnsev/api.py`; on this notebook's box and dates `assess_burn` returns the notebook's numbers.
+- `agent/` is a LangGraph agent with the loop of EVE's `ReactAgent` and a `verify` node that finds every number of the answer in the tool results. Answers are written for a non-specialist or a specialist, and a conversation keeps its earlier turns.
+- The model is any chat model served in the OpenAI format, chosen in `.env` (see `.env.example`). DeepSeek V4.1 Flash, Kimi K3 and GPT-5.4 mini were tested. `LLM_PROVIDER=custom` points it at a self-hosted endpoint, such as EVE-Instruct behind an OpenAI-compatible server; that was not tested.
+
+```bash
+pip install -r requirements-agent.txt
+python servers/burn_severity/test.py --quick     # the server alone: no model, no key
+python -m agent.run "Which burned slopes of the Vesuvius fire of August 2025 should be treated first?" --reader public
+python -m agent.chat                             # a conversation in the terminal
+```
 
 ## Data and credits
 

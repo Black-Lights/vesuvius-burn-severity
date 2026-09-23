@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import io
+
 import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
@@ -10,6 +13,34 @@ from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
 plt.rcParams.update({"font.size": 13, "axes.titlesize": 14, "legend.fontsize": 12})
+
+
+
+def fit_figures_to_width(dpi: int = 100) -> None:
+    """Draw every figure at the full width of the notebook's output area, whatever its size.
+
+    Notebook front ends show a PNG at its own pixel width, so a figure wider than the pane
+    scrolls sideways and a narrow one leaves space. Each figure is shown instead as an HTML
+    image at 100 % width, stored once. Outside IPython this does nothing.
+    """
+    from IPython import get_ipython
+
+    shell = get_ipython()
+    if shell is None:
+        return
+
+    def as_html(fig: Figure) -> str:
+        buffer = io.BytesIO()
+        fig.savefig(buffer, format="png", dpi=dpi, bbox_inches="tight")
+        data = base64.b64encode(buffer.getvalue()).decode("ascii")
+        return f'<img src="data:image/png;base64,{data}" style="width:100%; height:auto">'
+
+    # Starting the notebook plotting backend resets every figure formatter, so start it first.
+    plt.close(plt.figure())
+    formatters = shell.display_formatter.formatters
+    formatters["image/png"].pop(Figure, None)
+    formatters["text/html"].for_type(Figure, as_html)
+
 
 TRUE_COLOUR = ("B04", "B03", "B02")  # red, green, blue
 SWIR_COLOUR = ("B12", "B8A", "B04")  # short-wave infrared, near infrared, red
@@ -68,7 +99,7 @@ def usable_share(refl: xr.Dataset, orbits: dict[str, set[int]], fire: tuple[str,
     ax.set_xlabel("2025")
     ax.set_ylabel("usable share of the box (%)")
     ax.set_ylim(0, 105)
-    ax.legend(loc="lower right", ncol=4)
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=4, frameon=False)
     fig.tight_layout()
     return fig
 
@@ -88,7 +119,7 @@ def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
         for ax, (day, ds_day) in zip(row, ((pre_day, pre), (post_day, post))):
             ax.imshow(to_rgb(ds_day, bands, bounds))
             usable = float(ds_day["valid_fraction"]) * 100
-            ax.set_title(f"{label}, {day} ({usable:.0f}% usable)")
+            ax.set_title(f"{label}\n{day}, {usable:.0f}% usable")
             ax.set_axis_off()
     fig.tight_layout()
     return fig
@@ -123,7 +154,8 @@ def severity_map(
     ] + extra
     colours = ListedColormap([*SEVERITY_COLOURS, EXCLUDED_GREY])
     ax.imshow(shown, cmap=colours, vmin=0, vmax=5, interpolation="nearest")
-    ax.legend(handles=handles, loc="lower left", title="dNBR class, Key and Benson (2006)")
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=3,
+              title="dNBR class, Key and Benson (2006)", frameon=False)
     ax.set_title("Burn severity class per 20 m pixel")
     ax.set_axis_off()
     fig.tight_layout()
@@ -220,7 +252,8 @@ def agreement_map(ours: xr.DataArray, ref: xr.DataArray, scores: dict[str, float
         Patch(color=c, label=f"{name}: {ha:,.0f} ha")
         for (name, c), ha in zip(AGREEMENT_COLOURS.items(), areas)
     ]
-    ax.legend(handles=handles, loc="lower left", title=f"IoU {scores['iou']:.2f}")
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=3,
+              title=f"IoU {scores['iou']:.2f}", frameon=False)
     ax.set_title("Main fire against the EFFIS burnt-area polygons, 20 m grid")
     ax.set_axis_off()
     fig.tight_layout()

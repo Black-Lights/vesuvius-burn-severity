@@ -16,11 +16,21 @@ from __future__ import annotations
 
 from typing import Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+    trim_messages,
+)
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from .grounding import check
+
+# A long conversation keeps its latest turns within this many tokens (an assess_burn result is about
+# 3,000 to 4,000); eve-esa/agents trims the same way, at about 96,000.
+MAX_CONTEXT_TOKENS = 60_000
 
 SYSTEM_PROMPT = """\
 You answer questions about fires, burn severity and vegetation change with the tools of a
@@ -63,6 +73,7 @@ def system_prompt(reader: str | None = None) -> str:
         raise ValueError(f"reader must be one of public, expert or None, got {reader!r}")
     return SYSTEM_PROMPT.format(reader=READERS[reader])
 
+
 MAX_CHECKS = 1  # times an answer is sent back for numbers not found
 
 
@@ -94,14 +105,21 @@ def sources(messages) -> list[str]:
     return out
 
 
-def build_graph(llm, tools, reader: str | None = None):
+def build_graph(llm, tools, reader: str | None = None, checkpointer=None):
     """Compile the graph for a chat model that supports tool calling, a list of tools and a
-    reader ("public", "expert", or None to judge from the question)."""
+    reader ("public", "expert", or None to judge from the question).
+
+    With a ``checkpointer`` the graph keeps the messages of every turn of a conversation, so a
+    follow-up question can refer to earlier answers and tool results.
+    """
     model = llm.bind_tools(tools)
     prompt = system_prompt(reader)
 
     async def agent(state: State) -> dict:
-        reply = await model.ainvoke([SystemMessage(prompt), *state["messages"]])
+        # The latest turns that fit, starting at a question, so a tool result never loses its call.
+        recent = trim_messages(state["messages"], max_tokens=MAX_CONTEXT_TOKENS, token_counter="approximate",
+                               strategy="last", start_on="human")
+        reply = await model.ainvoke([SystemMessage(prompt), *recent])
         return {"messages": [reply]}
 
     def after_agent(state: State) -> Literal["tools", "verify"]:
@@ -132,4 +150,4 @@ def build_graph(llm, tools, reader: str | None = None):
     graph.add_conditional_edges("agent", after_agent, ["tools", "verify"])
     graph.add_edge("tools", "agent")
     graph.add_conditional_edges("verify", after_verify, ["agent", END])
-    return graph.compile()
+    return graph.compile(checkpointer=checkpointer)

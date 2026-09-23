@@ -94,3 +94,18 @@ def test_numbers_written_as_words_are_checked_too():
     found = [(shown, value) for shown, value, _ in numbers("Twenty more squares; twenty-two of them in one block.")]
     assert found == [("Twenty", 20.0), ("twenty-two", 22.0)]  # "one" is too common to count
     assert check("Twenty more squares come next.", ['{"priority_2_cells": 19}'])["not_found"] == ["Twenty"]
+
+
+def test_a_follow_up_can_quote_the_first_turn():
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    replies = [_call("assess_burn", ARGS), AIMessage("The fire burned 737 ha."),
+               AIMessage("Of those, 576 ha burned severely.")]  # no new tool call: 576 is from turn one
+    graph = build_graph(ScriptedModel(replies=replies), [assess_burn], checkpointer=InMemorySaver())
+    config = {"configurable": {"thread_id": "t1"}}
+    turn = {"checks": 0, "not_found": []}
+    asyncio.run(graph.ainvoke({"messages": [HumanMessage("How much burned?")], **turn}, config))
+    state = asyncio.run(graph.ainvoke({"messages": [HumanMessage("And how much of it severely?")], **turn}, config))
+    assert state["not_found"] == [] and state["checks"] == 0
+    assert [m.content for m in state["messages"] if isinstance(m, HumanMessage)] == [
+        "How much burned?", "And how much of it severely?"]

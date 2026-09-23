@@ -9,6 +9,8 @@ Everything a user might want to change lives here, with the reason next to it.
 BBOX = (14.35, 40.77, 14.50, 40.87)
 
 # The fire started on the evening of 8 August 2025 and was contained by 12 August.
+# EFFIS dates it from 7 August. The 7 August image covers only the west of the box and none of
+# the fire, so no number depends on which of the two dates is right.
 FIRE_START = "2025-08-08"
 FIRE_END = "2025-08-12"
 

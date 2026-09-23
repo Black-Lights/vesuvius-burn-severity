@@ -189,3 +189,38 @@ def index_history_and_dnbr(
     ax_map.set_axis_off()
     fig.tight_layout()
     return fig
+
+
+AGREEMENT_COLOURS = {"both": "#4d4d4d", "only ours": "#d7301f", "only EFFIS": "#2c7fb8"}
+
+
+def agreement_map(ours: xr.DataArray, ref: xr.DataArray, scores: dict[str, float]) -> Figure:
+    """Our main fire against the EFFIS polygons on the same grid, cropped to the fire.
+
+    Dark grey: burned in both. Red: burned only in ours. Blue: burned only in EFFIS.
+    """
+    from matplotlib.colors import ListedColormap
+    from matplotlib.patches import Patch
+
+    a, b = ours.values.astype(bool), ref.values.astype(bool)
+    codes = np.zeros(a.shape)  # 0 unburned in both
+    codes[a & b] = 1
+    codes[a & ~b] = 2
+    codes[~a & b] = 3
+    rows, cols = np.nonzero(a | b)
+    margin = 25  # pixels, 500 m
+    r0, r1 = max(rows.min() - margin, 0), min(rows.max() + margin, a.shape[0])
+    c0, c1 = max(cols.min() - margin, 0), min(cols.max() + margin, a.shape[1])
+    colours = ListedColormap(["#eef3ea", *AGREEMENT_COLOURS.values()])
+    fig, ax = plt.subplots(figsize=(9, 8))
+    ax.imshow(codes[r0:r1, c0:c1], cmap=colours, vmin=0, vmax=3, interpolation="nearest")
+    areas = (scores["both_ha"], scores["only_ours_ha"], scores["only_reference_ha"])
+    handles = [
+        Patch(color=c, label=f"{name}: {ha:,.0f} ha")
+        for (name, c), ha in zip(AGREEMENT_COLOURS.items(), areas)
+    ]
+    ax.legend(handles=handles, loc="lower left", title=f"IoU {scores['iou']:.2f}")
+    ax.set_title("Main fire against the EFFIS burnt-area polygons, 20 m grid")
+    ax.set_axis_off()
+    fig.tight_layout()
+    return fig

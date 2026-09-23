@@ -88,8 +88,9 @@ SEVERITY_CLASSES = [
 SEVERITY_CUT_DNBR = 0.27
 SEVERE_CLASSES = tuple(name for name, low, _high in SEVERITY_CLASSES if low >= SEVERITY_CUT_DNBR)
 
-# Slope threshold in degrees, from the same model. The ranking is rerun at each value in
-# SLOPE_SENSITIVITY_DEG to show that the top cells do not change when the threshold moves a little.
+# Slope threshold in degrees from the horizontal (0 is flat ground, 90 a vertical wall; 23 degrees
+# rises 42 m over 100 m across, a 42 % grade), from the same model. The ranking is rerun at each value
+# in SLOPE_SENSITIVITY_DEG to show that the top cells do not change when the threshold moves a little.
 SLOPE_THRESHOLD_DEG = 23.0
 SLOPE_SENSITIVITY_DEG = (20.0, 23.0, 26.0)
 

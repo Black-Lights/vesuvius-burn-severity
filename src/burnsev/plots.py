@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import base64
 import io
+from typing import NamedTuple
 
 import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
+import rioxarray  # noqa: F401  (registers the .rio accessor used below)
 import xarray as xr
+from matplotlib import colormaps
 from matplotlib import pyplot as plt
+from matplotlib.colors import Normalize, to_rgba
 from matplotlib.figure import Figure
+from PIL import Image
+from rasterio.enums import Resampling
+from rasterio.warp import transform_bounds
 
 plt.rcParams.update({"font.size": 13, "axes.titlesize": 14, "legend.fontsize": 12})
 
@@ -128,6 +135,8 @@ def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
 
 
 SEVERITY_COLOURS = ["#eef3ea", "#ffffb2", "#fd8d3c", "#e31a1c", "#67000d"]  # unburned to high
+DNBR_COLOURS = {"cmap": "RdYlGn_r", "vmin": -0.3, "vmax": 0.9}  # green unchanged, red burned
+NDVI_COLOURS = {"cmap": "YlGn", "vmin": 0.0, "vmax": 0.8}  # pale yellow bare ground, dark green dense
 EXCLUDED_GREY = "#8c8c8c"
 
 
@@ -217,12 +226,36 @@ def index_history_and_dnbr(
     ax_ndvi.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
     ax_ndvi.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
     ax_ndvi.set_xlabel("2025")
-    image = ax_map.imshow(dnbr.values, cmap="RdYlGn_r", vmin=-0.3, vmax=0.9)
+    image = ax_map.imshow(dnbr.values, **DNBR_COLOURS)
     fig.colorbar(image, ax=ax_map, orientation="horizontal", fraction=0.05, pad=0.02, aspect=40,
                  label="dNBR (red = vegetation lost)")
     ax_map.set_title("dNBR map: pre-fire median minus post-fire median")
     ax_map.set_axis_off()
     fig.tight_layout()
+    return fig
+
+
+def ndvi_before_after(before: xr.DataArray, after: xr.DataArray, burn: xr.DataArray) -> Figure:
+    """NDVI before and after the fire, the window medians, one above the other, with the outline
+    of the burn (dNBR > 0.27) on both.
+
+    Drawn in steps of 0.1 on the colour scale of the web map: each colour is a range that can be
+    read off the legend, and the picture stays a third of the size of a smooth one.
+    """
+    from matplotlib.colors import BoundaryNorm
+
+    steps = np.round(np.arange(0.0, 0.81, 0.1), 1)
+    cmap = plt.get_cmap(NDVI_COLOURS["cmap"], len(steps) + 1)
+    norm = BoundaryNorm(steps, cmap.N, extend="both")
+    fig, axes = plt.subplots(2, 1, figsize=(10, 18), layout="constrained")
+    for ax, ndvi, title in ((axes[0], before, "NDVI before: median 1 July to 7 August"),
+                            (axes[1], after, "NDVI after: median 13 August to 15 September")):
+        image = ax.imshow(ndvi.values, cmap=cmap, norm=norm, interpolation="nearest")
+        ax.contour(burn.values.astype(float), levels=[0.5], colors="firebrick", linewidths=0.8)
+        ax.set_title(title)
+        ax.set_axis_off()
+    fig.colorbar(image, ax=axes, orientation="horizontal", fraction=0.03, pad=0.02, aspect=40, ticks=steps,
+                 label="NDVI (pale = bare or burned ground, dark green = dense vegetation); red line: the burn")
     return fig
 
 
@@ -399,9 +432,113 @@ def priority_map(
     return fig
 
 
-def interactive_map(perimeter_file, cells_file):
-    """A small web map drawn from the written GeoJSON files: satellite or street background, the
-    main fire outline, and the flagged cells coloured by priority with their numbers on hover.
+WEB_CRS = "EPSG:3857"  # Web Mercator, the projection of Leaflet and most web maps
+
+
+class WebLayer(NamedTuple):
+    """An image ready for the web map."""
+
+    name: str
+    url: str  # the image itself as a data URI, so the saved notebook carries it
+    corners: list[list[float]]  # [[south, west], [north, east]], what Leaflet asks for
+    shown: bool = False  # switched on when the map opens
+
+
+def to_web(values: np.ndarray, like: xr.DataArray) -> tuple[np.ndarray, list[list[float]]]:
+    """Move an image from the cube grid onto the grid of a web map, and give its corners.
+
+    Leaflet places an image by stretching it between two corners in latitude and longitude on a
+    Web Mercator map. The cube is in UTM 33N, turned about 0.4° against north here, so stretched
+    as it is the image would sit up to 80 m (4 pixels) off at the edges. Reprojected first, every
+    pixel lands where it belongs. The new grid keeps 20 m on the ground, so each new pixel takes
+    the nearest old one: 99.6 % of the pixels appear exactly once, and every colour on the map is
+    a value that was measured, never an average. ``values`` is (y, x) or (y, x, bands) on the
+    grid of ``like``; the result is NaN outside the cube.
+    """
+    data = np.asarray(values, dtype="float32")
+    data = data[np.newaxis] if data.ndim == 2 else np.moveaxis(data, -1, 0)
+    grid = xr.DataArray(data, dims=("band", "y", "x"), coords={"y": like.y.values, "x": like.x.values})
+    grid = grid.rio.write_crs(like.rio.crs).rio.write_nodata(np.nan)
+    web = grid.rio.reproject(WEB_CRS, resampling=Resampling.nearest)
+    west, south, east, north = transform_bounds(WEB_CRS, "EPSG:4326", *web.rio.bounds())
+    out = np.moveaxis(web.values, 0, -1)
+    return (out[..., 0] if out.shape[-1] == 1 else out), [[south, west], [north, east]]
+
+
+def data_uri(pixels: np.ndarray, fmt: str) -> str:
+    """An 8-bit image as a data URI. WebP for smooth images (the pictures, dNBR): compressed with
+    small losses, like JPEG, to about a fifth of a PNG, and unlike JPEG it keeps transparency.
+    PNG for the class layers: lossless, so every class keeps its exact colour."""
+    buffer = io.BytesIO()
+    options = {"quality": 85} if fmt == "WEBP" else {"optimize": True}
+    Image.fromarray(pixels).save(buffer, fmt, **options)
+    return f"data:image/{fmt.lower()};base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
+
+def _rgba(colour: str) -> tuple[int, ...]:
+    return tuple(round(255 * v) for v in to_rgba(colour))
+
+
+def picture_layers(refl: xr.Dataset, pre_day: str, post_day: str) -> list[WebLayer]:
+    """The four pictures of step 4 for the web map: true colour and short-wave infrared colour,
+    before and after, with the same stretch (from the pre-fire day)."""
+    pre = refl.sel(time=pre_day).squeeze("time")
+    post = refl.sel(time=post_day).squeeze("time")
+    layers = []
+    for label, bands in (("true colour", TRUE_COLOUR), ("short-wave infrared colour", SWIR_COLOUR)):
+        bounds = stretch_bounds(pre, bands)
+        for day, ds_day in ((pre_day, pre), (post_day, post)):
+            rgb, corners = to_web(to_rgb(ds_day, bands, bounds), ds_day[bands[0]])
+            pixels = (255 * np.where(np.isnan(rgb), MISSING_GREY, rgb)).round().astype("uint8")
+            layers.append(WebLayer(f"{label}, {day}", data_uri(pixels, "WEBP"), corners))
+    return layers
+
+
+def _smooth_layer(name: str, da: xr.DataArray, colours: dict) -> WebLayer:
+    """A continuous quantity (an index) painted on a colour scale, transparent where it is NaN."""
+    values, corners = to_web(da.values, da)
+    norm = Normalize(colours["vmin"], colours["vmax"])
+    rgba = colormaps[colours["cmap"]](norm(values), bytes=True)
+    rgba[..., 3] = np.where(np.isnan(values), 0, 255)
+    return WebLayer(name, data_uri(rgba, "WEBP"), corners)
+
+
+def index_layers(ndvi_before: xr.DataArray, ndvi_after: xr.DataArray, dnbr: xr.DataArray) -> list[WebLayer]:
+    """NDVI before and after (window medians) and dNBR, in the colours of step 5. They cover the
+    whole box, so the map shows them as backgrounds: one at a time and opaque, so a colour always
+    means the same value, whatever lies underneath."""
+    return [
+        _smooth_layer("NDVI before (1 Jul to 7 Aug median)", ndvi_before, NDVI_COLOURS),
+        _smooth_layer("NDVI after (13 Aug to 15 Sep median)", ndvi_after, NDVI_COLOURS),
+        _smooth_layer("dNBR", dnbr, DNBR_COLOURS),
+    ]
+
+
+def class_layers(severity: xr.DataArray, severe_steep: xr.DataArray) -> list[WebLayer]:
+    """The severity classes of the main fire and the severe-and-steep ground, in the colours of
+    steps 6 and 8. Transparent where there is nothing to show (unburned ground, outside the box),
+    so they sit on top of any background."""
+    codes, corners = to_web(np.where(severity.values == 255, np.nan, severity.values), severity)
+    classes = np.zeros(codes.shape + (4,), dtype="uint8")
+    for code, colour in enumerate(SEVERITY_COLOURS[1:], start=1):  # 0, unburned, stays transparent
+        classes[codes == code] = _rgba(colour)
+
+    hit, _ = to_web(severe_steep.values, severity)
+    steep = np.zeros(hit.shape + (4,), dtype="uint8")
+    steep[hit == 1] = _rgba(STEEP_COLOURS["severe and steep"])
+    return [
+        WebLayer("severity classes, main fire", data_uri(classes, "PNG"), corners, shown=True),
+        WebLayer("severe and steep ground", data_uri(steep, "PNG"), corners),
+    ]
+
+
+def interactive_map(perimeter_file, cells_file, backgrounds=(), layers=(), effis=()):
+    """A small web map drawn from the written files and the layers of the notebook.
+
+    Backgrounds, one at a time: satellite, streets, and the images in ``backgrounds`` (the
+    pictures of step 4, NDVI, dNBR), so one click goes from before to after. On top, each switched
+    on and off: the class ``layers``, the ``effis`` burnt-area polygons as dashed outlines, the
+    flagged cells coloured by priority with their numbers on hover, and the main fire outline.
 
     Interactive in Jupyter, VS Code and Colab; GitHub does not run it, so the notebook also keeps
     the static priority map.
@@ -416,6 +553,22 @@ def interactive_map(perimeter_file, cells_file):
                       control_scale=True)
     folium.TileLayer("Esri.WorldImagery", name="satellite (Esri)").add_to(fmap)
     folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)").add_to(fmap)
+    for layer in backgrounds:  # overlay=False: a background, chosen with the radio buttons
+        folium.raster_layers.ImageOverlay(layer.url, layer.corners, name=layer.name, overlay=False,
+                                          show=False).add_to(fmap)
+    for layer in layers:
+        folium.raster_layers.ImageOverlay(layer.url, layer.corners, name=layer.name, opacity=0.8,
+                                          show=layer.shown).add_to(fmap)
+    if effis:
+        folium.GeoJson(
+            {"type": "FeatureCollection", "features": list(effis)},
+            name="EFFIS burnt areas",
+            show=False,
+            style_function=lambda f: {"color": AGREEMENT_COLOURS["only EFFIS"], "weight": 2,
+                                      "dashArray": "6 4", "fill": False},
+            tooltip=folium.GeoJsonTooltip(fields=["COMMUNE", "FIREDATE", "AREA_HA"],
+                                          aliases=["municipality", "start", "hectares"]),
+        ).add_to(fmap)
     fill = {"1: treat first": "#67000d", "2: treat next": "#fd8d3c"}
     folium.GeoJson(
         cells,

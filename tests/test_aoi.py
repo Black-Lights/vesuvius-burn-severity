@@ -29,3 +29,8 @@ def test_severe_classes_follow_the_cut():
 
 def test_sensitivity_includes_the_chosen_slope():
     assert aoi.SLOPE_THRESHOLD_DEG in aoi.SLOPE_SENSITIVITY_DEG
+
+
+def test_priority_cuts_are_ordered_shares():
+    first, second = aoi.PRIORITY_SHARES
+    assert 0 < second < first <= 1

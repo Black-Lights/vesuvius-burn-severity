@@ -96,3 +96,9 @@ SLOPE_SENSITIVITY_DEG = (20.0, 23.0, 26.0)
 # Side of the grid cell that groups pixels into planning units. 250 m is about 12 x 12 pixels at
 # 20 m: enough to average out single-pixel noise, small enough to point a crew at one slope.
 GRID_CELL_M = 250
+
+# Cuts between the three priorities, as the share of a cell that is severe and steep: at least
+# half, treat first; a quarter to a half, treat next; less, monitor. A planning choice, not a
+# published threshold: M1 turns the share into a probability together with rainfall intensity,
+# which is not modelled here. Step 9 shows how the lists move with the slope threshold.
+PRIORITY_SHARES = (0.50, 0.25)

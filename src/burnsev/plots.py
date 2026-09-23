@@ -339,3 +339,61 @@ def slope_and_fire(
     ax3.grid(alpha=0.3)
     fig.tight_layout()
     return fig
+
+
+PRIORITY_EDGES = {"1: treat first": "#3b0010", "2: treat next": "#e6550d", "3: monitor": "#b0b0b0"}
+
+
+def priority_map(
+    cells: pd.DataFrame,
+    fire: xr.DataArray,
+    severe: xr.DataArray,
+    slope: xr.DataArray,
+    threshold: float,
+    cell_m: float,
+    label_top: int = 10,
+) -> Figure:
+    """The grid cells over the main fire, outlined by priority, the top ranks numbered, on top of
+    the pixels split into low severity, severe on gentler ground and severe and steep."""
+    from matplotlib.colors import ListedColormap
+    from matplotlib.patches import Patch, Rectangle
+
+    in_fire = fire.values.astype(bool)
+    sev = severe.values.astype(bool)
+    steep = slope.values >= threshold
+    codes = np.full(in_fire.shape, np.nan)
+    codes[in_fire & ~sev] = 0
+    codes[in_fire & sev & ~steep] = 1
+    codes[in_fire & sev & steep] = 2
+    x, y = fire.x.values, fire.y.values
+    half = abs(float(x[1] - x[0])) / 2
+    extent = (x[0] - half, x[-1] + half, y[-1] - half, y[0] + half)
+
+    fig, ax = plt.subplots(figsize=(10, 10.5))
+    ax.imshow(codes, cmap=ListedColormap(list(STEEP_COLOURS.values())), vmin=0, vmax=2,
+              extent=extent, interpolation="nearest", alpha=0.5)
+    order = {label: i for i, label in enumerate(PRIORITY_EDGES)}
+    for _, c in cells.sort_values("priority", key=lambda s: s.map(order), ascending=False).iterrows():
+        first = c["priority"] == "1: treat first"
+        ax.add_patch(Rectangle((c["col"] * cell_m, c["row"] * cell_m), cell_m, cell_m, fill=False,
+                               edgecolor=PRIORITY_EDGES[c["priority"]],
+                               linewidth=2.4 if first else 1.6 if c["priority"] == "2: treat next" else 0.6))
+        if c["rank"] <= label_top:
+            ax.text(c["x"], c["y"], str(c["rank"]), ha="center", va="center", fontsize=12,
+                    fontweight="bold", color="white",
+                    bbox={"boxstyle": "circle,pad=0.2", "facecolor": "#3b0010", "edgecolor": "none"})
+    cols, rows = cells["col"], cells["row"]
+    ax.set_xlim(cols.min() * cell_m - cell_m, (cols.max() + 2) * cell_m)
+    ax.set_ylim(rows.min() * cell_m - cell_m, (rows.max() + 2) * cell_m)
+    ax.set_aspect("equal")
+    ax.set_axis_off()
+    counts = cells["priority"].value_counts()
+    handles = [
+        Patch(facecolor="none", edgecolor=colour, linewidth=2, label=f"priority {label}: {counts.get(label, 0)} cells")
+        for label, colour in PRIORITY_EDGES.items()
+    ] + [Patch(color=colour, alpha=0.5, label=name) for name, colour in STEEP_COLOURS.items()]
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=2, frameon=False)
+    ax.set_title(f"{cell_m:.0f} m cells ranked by severe and steep share (steep = {threshold:.0f}° or more);"
+                 f" top {label_top} numbered")
+    fig.tight_layout()
+    return fig

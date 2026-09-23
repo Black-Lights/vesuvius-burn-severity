@@ -11,7 +11,7 @@ EVE-Instruct, served through an OpenAI-compatible endpoint, would be plugged in.
 
 Usage:
     python -m agent.run "Which burned slopes of the Vesuvius fire of August 2025 need work first?"
-    python -m agent.run "..." --provider kimi --save outputs/agent_run.json
+    python -m agent.run "..." --provider kimi --reader expert --save outputs/agent_run.json
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ SERVER = Path(__file__).resolve().parents[1] / "servers" / "burn_severity" / "se
 
 # name: (base URL, key variable, default model); None is OpenAI's own endpoint
 PROVIDERS = {
-    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY", "deepseek-v4-pro"),
+    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY", "deepseek-flash"),  # V4.1 Flash
     "kimi": ("https://api.moonshot.ai/v1", "KIMI_API_KEY", "kimi-k3"),
     "openai": (None, "OPENAI_API_KEY", "gpt-5.4-mini"),
 }
@@ -70,7 +70,7 @@ def make_llm(provider: str | None = None, model: str | None = None) -> tuple[Cha
     return ChatOpenAI(model=name, base_url=base_url, api_key=key, timeout=180, max_retries=2), provider, name
 
 
-def transcript(messages: list, provider: str, model: str, seconds: float) -> dict:
+def transcript(messages: list, provider: str, model: str, reader: str | None, seconds: float) -> dict:
     """The run as plain data: what was asked, called, returned and answered, and the check."""
     steps = []
     for m in messages:
@@ -89,6 +89,7 @@ def transcript(messages: list, provider: str, model: str, seconds: float) -> dic
     return {
         "provider": provider,
         "model": model,
+        "reader": reader or "judged from the question",
         "seconds": round(seconds, 1),
         "tokens": tokens,
         "steps": steps,
@@ -97,17 +98,22 @@ def transcript(messages: list, provider: str, model: str, seconds: float) -> dic
     }
 
 
-async def ask(question: str, provider: str | None = None, model: str | None = None) -> dict:
-    """Run one question through the agent and the MCP server; return the transcript."""
+async def ask(question: str, provider: str | None = None, model: str | None = None,
+              reader: str | None = None) -> dict:
+    """Run one question through the agent and the MCP server; return the transcript.
+
+    ``reader`` is "public" (plain words), "expert" (technical terms) or None (judged from the
+    question). It changes the words of the answer, never its numbers.
+    """
     llm, provider, model = make_llm(provider, model)
     server = StdioServerParameters(command=sys.executable, args=[str(SERVER), "--transport", "stdio"])
     started = time.perf_counter()
     async with stdio_client(server) as (read, write), ClientSession(read, write) as session:
         await session.initialize()
-        graph = build_graph(llm, await load_mcp_tools(session))
+        graph = build_graph(llm, await load_mcp_tools(session), reader)
         state = await graph.ainvoke({"messages": [HumanMessage(question)], "checks": 0, "not_found": []},
                                     {"recursion_limit": 20})  # at most about nine tool rounds
-    return transcript(state["messages"], provider, model, time.perf_counter() - started)
+    return transcript(state["messages"], provider, model, reader, time.perf_counter() - started)
 
 
 def main() -> None:
@@ -115,9 +121,10 @@ def main() -> None:
     parser.add_argument("question")
     parser.add_argument("--provider", choices=[*PROVIDERS, "custom"])
     parser.add_argument("--model")
+    parser.add_argument("--reader", choices=["public", "expert"], help="default: judged from the question")
     parser.add_argument("--save", type=Path, help="write the transcript as JSON")
     args = parser.parse_args()
-    run = asyncio.run(ask(args.question, args.provider, args.model))
+    run = asyncio.run(ask(args.question, args.provider, args.model, args.reader))
     for step in run["steps"]:
         body = step.get("content") or json.dumps(step.get("tool_calls"))
         print(f"[{step['role']}{' ' + step['name'] if 'name' in step else ''}] {body[:600]}")

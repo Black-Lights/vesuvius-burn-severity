@@ -24,16 +24,44 @@ from .grounding import check
 
 SYSTEM_PROMPT = """\
 You answer questions about fires, burn severity and vegetation change with the tools of a
-Sentinel-2 pipeline. Every number in your answer must come from a tool result; never from memory.
+Sentinel-2 pipeline. Every number in your answer must come from a tool result, never from memory.
 
+Using the tools
 - Areas are "west,south,east,north" in decimal degrees, longitude first. When the user names a
   place, use its coordinates.
 - When the user gives no fire dates, call find_fires first and use the dates and bbox it returns
   (with margin_km=1, since its bbox hugs the burn).
-- Answer in at most 120 words, in plain language, for a reader who does not work in remote
-  sensing. Quote numbers exactly as the tools give them, with units, and say which files hold
-  the full result.
+
+Writing the answer
+- Who asks decides the words, never the numbers. Quote numbers exactly as the tools give them,
+  in digits, with units, and say which files hold the full result. At most 150 words.
+- Add nothing about the place (villages, roads, buildings) that the tools did not return. Take
+  the method and its limitations from the tool results, not from memory.
+- {reader}
 """
+
+# Who reads the answer. The brief's users are the park authority and civil protection, who do not
+# work in remote sensing, so an unknown reader gets plain words.
+READERS = {
+    "public": "The reader does not work in remote sensing: a park ranger, a civil protection officer, "
+    "a mayor. Use plain words (badly burned, steep: 23 degrees or more), name places and actions, "
+    "and leave out index names, class names and file formats unless you explain them in a few words.",
+    "expert": "The reader is a geospatial or remote sensing scientist. Use the technical terms (dNBR, "
+    "the Key and Benson classes, NDVI, the terrain term of the M1 model, the elevation model and its "
+    "resolution, the pre- and post-fire windows, COG and GeoJSON) and give the main limitation in one "
+    "line.",
+    None: "Judge the reader from the question. Technical wording means a specialist, who gets the "
+    "technical terms (dNBR, severity classes, the elevation model, the windows); otherwise write in "
+    "plain words for someone who does not work in remote sensing, without index names. When unsure, "
+    "write plainly.",
+}
+
+
+def system_prompt(reader: str | None = None) -> str:
+    """The system prompt for a reader: "public", "expert", or None to judge from the question."""
+    if reader not in READERS:
+        raise ValueError(f"reader must be one of public, expert or None, got {reader!r}")
+    return SYSTEM_PROMPT.format(reader=READERS[reader])
 
 MAX_CHECKS = 1  # times an answer is sent back for numbers not found
 
@@ -66,12 +94,14 @@ def sources(messages) -> list[str]:
     return out
 
 
-def build_graph(llm, tools):
-    """Compile the graph for a chat model that supports tool calling and a list of tools."""
+def build_graph(llm, tools, reader: str | None = None):
+    """Compile the graph for a chat model that supports tool calling, a list of tools and a
+    reader ("public", "expert", or None to judge from the question)."""
     model = llm.bind_tools(tools)
+    prompt = system_prompt(reader)
 
     async def agent(state: State) -> dict:
-        reply = await model.ainvoke([SystemMessage(SYSTEM_PROMPT), *state["messages"]])
+        reply = await model.ainvoke([SystemMessage(prompt), *state["messages"]])
         return {"messages": [reply]}
 
     def after_agent(state: State) -> Literal["tools", "verify"]:

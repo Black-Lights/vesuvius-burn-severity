@@ -3,12 +3,13 @@
 import asyncio
 import json
 
+import pytest
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
 
-from agent.graph import build_graph
+from agent.graph import build_graph, system_prompt
 from agent.grounding import check, numbers
 
 
@@ -79,3 +80,17 @@ def test_a_number_still_wrong_after_the_retry_is_flagged():
     state = _run([_call("assess_burn", ARGS), AIMessage("The fire burned 750 ha."),
                   AIMessage("The fire burned 760 ha.")])
     assert state["checks"] == 1 and state["not_found"] == ["760"]
+
+
+def test_the_reader_changes_the_words_asked_for_not_the_rules():
+    public, expert, judged = system_prompt("public"), system_prompt("expert"), system_prompt(None)
+    assert "plain words" in public and "dNBR" in expert and "Judge the reader" in judged
+    assert all("never from memory" in p for p in (public, expert, judged))
+    with pytest.raises(ValueError, match="reader"):
+        system_prompt("child")
+
+
+def test_numbers_written_as_words_are_checked_too():
+    found = [(shown, value) for shown, value, _ in numbers("Twenty more squares; twenty-two of them in one block.")]
+    assert found == [("Twenty", 20.0), ("twenty-two", 22.0)]  # "one" is too common to count
+    assert check("Twenty more squares come next.", ['{"priority_2_cells": 19}'])["not_found"] == ["Twenty"]

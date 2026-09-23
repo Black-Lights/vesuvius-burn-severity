@@ -17,14 +17,29 @@ import re
 NUMBER = re.compile(r"(?<![\w.])(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?")
 LIST_MARKER = re.compile(r"^\s*\d+[.)]\s", re.MULTILINE)  # "1. " at the start of a line: not data
 
+# Numbers written as words, two to ninety-nine ("one" is left out: it is too often not a number).
+SMALL = ["two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve",
+         "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"]
+TENS = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"]
+DIGITS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+WORD_VALUE = {w: i + 2 for i, w in enumerate(SMALL)} | {w: 20 + 10 * i for i, w in enumerate(TENS)}
+NUMBER_WORD = re.compile(
+    rf"\b(?:({'|'.join(TENS)})(?:[- ]({'|'.join(DIGITS)}))?|({'|'.join(SMALL)}))\b", re.IGNORECASE
+)
+
 
 def numbers(text: str) -> list[tuple[str, float, int]]:
-    """Every number in ``text`` as (as written, value, decimals), list markers left out."""
+    """Every number in ``text`` as (as written, value, decimals), list markers left out, numbers
+    written as words included."""
     found = []
     for match in NUMBER.finditer(LIST_MARKER.sub(" ", text)):
         whole, fraction = match.group(1).replace(",", ""), match.group(2)
         value = float(f"{whole}.{fraction}") if fraction else float(whole)
         found.append((match.group(0), value, len(fraction) if fraction else 0))
+    for match in NUMBER_WORD.finditer(text):
+        tens, unit, small = (g.lower() if g else None for g in match.groups())
+        value = WORD_VALUE[small] if small else WORD_VALUE[tens] + (DIGITS.index(unit) + 1 if unit else 0)
+        found.append((match.group(0), float(value), 0))
     return found
 
 

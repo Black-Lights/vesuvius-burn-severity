@@ -59,7 +59,7 @@ In `outputs/`, all reopened and checked by the notebook:
 - `dnbr_20m.tif`, `severity_20m.tif`: Cloud-Optimised GeoTIFF, EPSG:32633, 20 m. The severity raster carries its colour table.
 - `main_fire_perimeter.geojson`, `priority_cells.geojson` (159 ranked cells), `alert_cells.geojson` (the 40 flagged cells): GeoJSON in longitude and latitude.
 - `before_after.png`, `priority_map.png`.
-- `agent_runs.json`: the saved run of bonus A, replayed when no model key is set.
+- `agent_runs.json`, `agent_models.json`: the saved runs of bonus A (three conversations; one question to three models), replayed when no model key is set.
 
 They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](https://geojson.io).
 

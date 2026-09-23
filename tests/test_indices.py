@@ -33,6 +33,19 @@ def test_window_median_skips_masked_dates_and_refuses_an_empty_window():
         indices.window_median(da, "2025-07-01", "2025-07-31")
 
 
+def test_severity_classes_at_the_breaks_and_no_data():
+    values = xr.DataArray([[-0.2, 0.09, 0.10, 0.27, 0.44, 0.66, 1.1, np.nan]], dims=("y", "x"))
+    codes = indices.severity_class(values)
+    assert codes.dtype == "uint8"
+    assert codes.values.tolist() == [[0, 0, 1, 2, 3, 4, 4, 255]]
+
+
+def test_area_by_class_in_hectares():
+    codes = xr.DataArray([[0, 0, 1, 4, 255]], dims=("y", "x")).astype("uint8")
+    areas = indices.area_by_class(codes, pixel_m=100)  # one 100 m pixel = 1 ha; 255 is no data
+    assert areas == {"unburned": 2.0, "low": 1.0, "high": 1.0}
+
+
 def test_dnbr_is_positive_where_nbr_dropped():
     da = _series([0.3, 0.5, -0.1, -0.1], ["2025-06-01", "2025-06-10", "2025-08-20", "2025-09-01"])
     out = indices.dnbr(da, ("2025-06-01", "2025-06-30"), ("2025-08-13", "2025-09-30"))

@@ -50,15 +50,15 @@ def dnbr(nbr_da: xr.DataArray, pre: tuple[str, str], post: tuple[str, str]) -> x
 
 
 def severity_class(dnbr_da: xr.DataArray) -> xr.DataArray:
-    """Integer class raster from dNBR using the thresholds in ``aoi.SEVERITY_CLASSES``.
+    """Class code per pixel from dNBR, using the breaks in ``aoi.SEVERITY_CLASSES``.
 
     0 = unburned, 1 = low, 2 = moderate-low, 3 = moderate-high, 4 = high; 255 = no data.
+    A pixel exactly on a break goes to the upper class (0.27 is moderate-low).
     """
-    out = xr.full_like(dnbr_da, 255, dtype="uint8")
-    for code, (_, lo, hi) in enumerate(aoi.SEVERITY_CLASSES):
-        out = out.where(~((dnbr_da >= lo) & (dnbr_da < hi)), code)
-    out = out.where(~dnbr_da.isnull(), 255)
-    return out.astype("uint8").rename("severity")
+    breaks = [low for _, low, _ in aoi.SEVERITY_CLASSES[1:]]  # 0.10, 0.27, 0.44, 0.66
+    codes = np.digitize(dnbr_da.values, breaks).astype("uint8")
+    codes[np.isnan(dnbr_da.values)] = 255
+    return dnbr_da.copy(data=codes).rename("severity")
 
 
 def class_names() -> dict[int, str]:

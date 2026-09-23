@@ -94,6 +94,26 @@ def before_after(refl: xr.Dataset, pre_day: str, post_day: str) -> Figure:
     return fig
 
 
+SEVERITY_COLOURS = ["#eef3ea", "#ffffb2", "#fd8d3c", "#e31a1c", "#67000d"]  # unburned to high
+
+
+def severity_map(severity: xr.DataArray, areas: dict[str, float]) -> Figure:
+    """The class raster in the usual burn-severity colours, with hectares per class in the legend."""
+    from matplotlib.colors import ListedColormap
+    from matplotlib.patches import Patch
+
+    names = list(areas)
+    fig, ax = plt.subplots(figsize=(9, 8))
+    shown = severity.where(severity != 255).values  # no data drawn white
+    ax.imshow(shown, cmap=ListedColormap(SEVERITY_COLOURS), vmin=0, vmax=4, interpolation="nearest")
+    handles = [Patch(color=c, label=f"{n}: {areas[n]:,.0f} ha") for n, c in zip(names, SEVERITY_COLOURS)]
+    ax.legend(handles=handles, loc="lower left", title="dNBR class, Key and Benson (2006)")
+    ax.set_title("Burn severity class per 20 m pixel")
+    ax.set_axis_off()
+    fig.tight_layout()
+    return fig
+
+
 def nbr_history_and_dnbr(
     nbr: xr.DataArray,
     dnbr: xr.DataArray,

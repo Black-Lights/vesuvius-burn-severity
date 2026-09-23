@@ -272,7 +272,7 @@ def slope_and_fire(
     thresholds: tuple[float, ...],
     chosen: float,
 ) -> Figure:
-    """Three panels, one above the other. Top: slope over the box with the main fire outlined.
+    """Three plots, one above the other. Top: slope over the box with the main fire outlined.
     Middle: the main fire split into low severity, severe on gentler ground and severe and steep
     (at or above ``chosen``). Bottom: the slope distribution inside the fire by severity, with
     the candidate thresholds.
@@ -397,3 +397,42 @@ def priority_map(
                  f" top {label_top} numbered")
     fig.tight_layout()
     return fig
+
+
+def interactive_map(perimeter_file, cells_file):
+    """A small web map drawn from the written GeoJSON files: satellite or street background, the
+    main fire outline, and the flagged cells coloured by priority with their numbers on hover.
+
+    Interactive in Jupyter, VS Code and Colab; GitHub does not run it, so the notebook also keeps
+    the static priority map.
+    """
+    import folium
+    import geopandas as gpd
+
+    perimeter = gpd.read_file(perimeter_file)
+    cells = gpd.read_file(cells_file)
+    west, south, east, north = perimeter.total_bounds
+    fmap = folium.Map(location=[(south + north) / 2, (west + east) / 2], zoom_start=14, tiles=None,
+                      control_scale=True)
+    folium.TileLayer("Esri.WorldImagery", name="satellite (Esri)").add_to(fmap)
+    folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)").add_to(fmap)
+    fill = {"1: treat first": "#67000d", "2: treat next": "#fd8d3c"}
+    folium.GeoJson(
+        cells,
+        name="flagged cells",
+        style_function=lambda f: {"color": fill[f["properties"]["priority"]], "weight": 2,
+                                  "fillColor": fill[f["properties"]["priority"]], "fillOpacity": 0.4},
+        tooltip=folium.GeoJsonTooltip(
+            fields=["rank", "priority", "severe_steep_share", "severe_steep_ha", "green_ndvi", "lat", "lon"],
+            aliases=["rank", "priority", "share severe and steep", "severe and steep (ha)",
+                     "green cover (NDVI)", "latitude", "longitude"],
+        ),
+    ).add_to(fmap)
+    folium.GeoJson(
+        perimeter,
+        name="main fire perimeter",
+        style_function=lambda f: {"color": "#00b4ff", "weight": 2, "fill": False},
+    ).add_to(fmap)
+    folium.LayerControl(collapsed=False).add_to(fmap)
+    fmap.fit_bounds([[south, west], [north, east]])
+    return fmap

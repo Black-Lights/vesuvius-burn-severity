@@ -16,6 +16,6 @@ import os
 for _name in ("PROJ_LIB", "PROJ_DATA", "GDAL_DATA"):
     os.environ.pop(_name, None)
 
-from . import aoi, catalog, decision, indices, ingest, reference, terrain  # noqa: F401
+from . import aoi, catalog, decision, export, indices, ingest, reference, terrain  # noqa: F401
 
 __version__ = "0.1.0"

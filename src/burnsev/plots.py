@@ -331,6 +331,34 @@ def burn_probability_maps(
     return fig
 
 
+# ESRI's legend colours, in the class order of terramind.CLASSES (0 no data ... 9 rangeland).
+LAND_COVER_COLOURS = ["#ffffff", "#419bdf", "#397d49", "#7a87c6", "#e49635", "#c4281b", "#a59b8f",
+                      "#a8ebff", "#616161", "#e3e2c3"]
+
+
+def land_cover_maps(left: np.ndarray, right: np.ndarray, fire_10m: np.ndarray, titles: tuple[str, str],
+                    names: list[str]) -> Figure:
+    """Two land cover maps side by side in ESRI's colours, with the outer edge of the main fire."""
+    from matplotlib.colors import ListedColormap
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch
+    from scipy import ndimage
+
+    colours = ListedColormap(LAND_COVER_COLOURS)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.4))
+    for ax, values, title in zip(axes, (left, right), titles):
+        ax.imshow(values, cmap=colours, vmin=0, vmax=len(LAND_COVER_COLOURS) - 1, interpolation="nearest")
+        ax.contour(ndimage.binary_fill_holes(fire_10m), levels=[0.5], colors="black", linewidths=1.2)
+        ax.set_title(title)
+        ax.set_axis_off()
+    present = sorted(set(np.unique(left)) | set(np.unique(right)))
+    handles = [Patch(color=LAND_COVER_COLOURS[c], label=names[c]) for c in present if c != 0]
+    handles.append(Line2D([], [], color="black", label="dNBR main fire"))
+    fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False)
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    return fig
+
+
 STEEP_COLOURS = {"low severity": "#fed976", "severe, gentler slope": "#fd8d3c", "severe and steep": "#800026"}
 
 

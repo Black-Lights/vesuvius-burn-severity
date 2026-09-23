@@ -1,0 +1,82 @@
+# Burn severity and erosion priority after the Vesuvius fire of August 2025
+
+A Sentinel-2 pipeline in one Jupyter notebook: it maps how badly the fire of August 2025 burned the south-east flank of Vesuvius, adds slope, and ranks where the park authority and Campania civil protection should act first against erosion and debris flows before the autumn rains.
+
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Black-Lights/vesuvius-burn-severity/blob/main/vesuvius_burn_severity.ipynb)
+
+![Ranked 250 m cells over the main fire](outputs/priority_map.png)
+
+## The answer
+
+| | |
+|---|---|
+| Burned, main fire | 737 ha (EFFIS: 753 ha, intersection over union 0.85) |
+| Moderate or high severity | 576 ha |
+| Of that, 23° or steeper | 177 ha |
+| Treat first: 250 m cells at least half severe and steep | 24 cells, 110 ha |
+| Treat next: a quarter to a half | 16 cells, 35 ha |
+| First list at a 20° or 26° limit | 24 or 19 of the 24 cells stay |
+
+The notebook ends step 9 with a plain-language summary written by the code from these numbers.
+
+## Run it
+
+**Colab.** Open the badge above and run all cells. The first code cell clones this repository and installs its package.
+
+**Locally**, with Python 3.12:
+
+```bash
+pip install -r requirements.txt -r requirements-jupyter.txt
+pip install -e .
+jupyter lab vesuvius_burn_severity.ipynb
+```
+
+The first run downloads the Sentinel-2 pixels from Microsoft Planetary Computer, a few minutes; later runs read the cache in `data/cache/`. No account or API key is needed. `requirements.lock.txt` pins the exact versions used.
+
+## What is where
+
+| Notebook section | Code |
+|---|---|
+| 1. Settings, each with its reason | `src/burnsev/aoi.py` |
+| 2. STAC search, scene table | `src/burnsev/catalog.py` |
+| 3. Pixels, cloud mask, reflectance | `src/burnsev/ingest.py` |
+| 4. True-colour and short-wave infrared pictures | `src/burnsev/plots.py` |
+| 5. NBR and NDVI per date, window medians, dNBR, time series | `src/burnsev/indices.py` |
+| 6. Severity classes, main fire | `src/burnsev/indices.py` |
+| 7. Check against the EFFIS perimeter | `src/burnsev/reference.py` |
+| 8. TINITALY 10 m elevation, slope | `src/burnsev/terrain.py` |
+| 9. The decision: ranked cells, sensitivity, summary | `src/burnsev/decision.py` |
+| 10. Files written and checked, interactive map | `src/burnsev/export.py` |
+| 11. Limitations and next steps | notebook only |
+
+The notebook shows the source of the functions that carry the science next to the cells that call them.
+
+## Outputs
+
+In `outputs/`, all reopened and checked by the notebook:
+
+- `dnbr_20m.tif`, `severity_20m.tif`: Cloud-Optimised GeoTIFF, EPSG:32633, 20 m. The severity raster carries its colour table.
+- `main_fire_perimeter.geojson`, `priority_cells.geojson` (159 ranked cells), `alert_cells.geojson` (the 40 flagged cells): GeoJSON in longitude and latitude.
+- `before_after.png`, `priority_map.png`.
+
+They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](https://geojson.io).
+
+## Checks
+
+Every change went through a branch and a pull request. GitHub Actions runs ruff, 42 unit tests on small synthetic arrays with no network, a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+
+## Data and credits
+
+- Sentinel-2 L2A: contains modified Copernicus Sentinel data 2025, through [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com).
+- Copernicus DEM GLO-30, used as the 30 m comparison: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA.
+- TINITALY 1.1: Tarquini S., Isola I., Favalli M., Battistini A., Dotta G. (2023). TINITALY, a digital elevation model of Italy with a 10 meters cell size (Version 1.1). INGV. https://doi.org/10.13127/tinitaly/1.1. CC BY 4.0. A cut of the box is kept in `data/reference/`.
+- Burnt-area polygons: [EFFIS](https://forest-fire.emergency.copernicus.eu), European Commission Joint Research Centre, fetched on 23 September 2026 and kept in `data/reference/`.
+- Method: Key and Benson (2006) for the dNBR classes; Staley et al. (2017) for the M1 terrain term; Horn (1981) for slope; Grohmann (2015) on resampling; Veraverbeke et al. (2010) on the post-fire window.
+
+## Related
+
+The EFFIS server in the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) returns fire statistics and plots at 100 m through the Copernicus Data Space Statistical API. This notebook works on the pixels and returns rasters, vectors and a decision.
+
+## AI tools
+
+Built with help from AI coding tools (Claude). Every line was read, run and checked, and each choice is explained in the notebook.

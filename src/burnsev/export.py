@@ -81,10 +81,14 @@ def main_fire_perimeter(fire: xr.DataArray) -> gpd.GeoDataFrame:
 
 
 def write_geojson(gdf: gpd.GeoDataFrame, path: Path) -> None:
-    """GeoJSON in longitude and latitude (RFC 7946), coordinates to 6 decimals (about 0.1 m)."""
+    """GeoJSON as the standard (RFC 7946) defines it: longitude and latitude, polygons wound
+    counter-clockwise, coordinates to 6 decimals (about 0.1 m)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     gdf.to_crs("EPSG:4326").to_file(
-        path, driver="GeoJSON", engine="pyogrio", layer_options={"COORDINATE_PRECISION": 6}
+        path,
+        driver="GeoJSON",
+        engine="pyogrio",
+        layer_options={"RFC7946": "YES", "COORDINATE_PRECISION": 6},
     )
 
 

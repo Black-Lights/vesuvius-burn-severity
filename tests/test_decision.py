@@ -40,3 +40,15 @@ def test_cells_outside_the_fire_are_dropped_and_polygons_are_squares():
     assert len(cells) == 1
     shapes = decision.cells_to_geodataframe(cells, "EPSG:32633", cell_m=200)
     assert shapes.geometry.iloc[0].area == 200 * 200
+
+
+def test_largest_block_joins_cells_that_share_an_edge():
+    cells = decision.pd.DataFrame(
+        {
+            "row": [0, 0, 1, 5],
+            "col": [0, 1, 1, 5],
+            "priority": ["1: treat first"] * 4,
+        }
+    )
+    block = decision.largest_block(cells)
+    assert sorted(zip(block["row"], block["col"])) == [(0, 0), (0, 1), (1, 1)]

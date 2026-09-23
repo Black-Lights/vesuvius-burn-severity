@@ -12,6 +12,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
+from scipy import ndimage
 from shapely.geometry import box
 
 from . import aoi
@@ -128,8 +129,21 @@ def _first(cells: pd.DataFrame) -> list[tuple[int, int]]:
     return list(zip(top["row"], top["col"]))
 
 
+def largest_block(cells: pd.DataFrame, label: str = PRIORITY_LABELS[0]) -> pd.DataFrame:
+    """The biggest group of ``label`` cells that touch along an edge: one area a crew can work."""
+    chosen = cells[cells["priority"] == label]
+    if chosen.empty:
+        return chosen
+    r0, c0 = chosen["row"].min(), chosen["col"].min()
+    grid = np.zeros((chosen["row"].max() - r0 + 1, chosen["col"].max() - c0 + 1), dtype=bool)
+    grid[chosen["row"] - r0, chosen["col"] - c0] = True
+    groups, _ = ndimage.label(grid)
+    member = groups[chosen["row"] - r0, chosen["col"] - c0]
+    return chosen[member == np.bincount(member)[1:].argmax() + 1]
+
+
 def summary(
-    cells: pd.DataFrame,
+    grid: pd.DataFrame,
     sens: pd.DataFrame,
     place: str,
     burned_ha: float,
@@ -139,21 +153,26 @@ def summary(
     cell_m: float = aoi.GRID_CELL_M,
     shares: tuple[float, float] = aoi.PRIORITY_SHARES,
 ) -> str:
-    """The answer in plain words, built from the numbers so it can never disagree with them."""
-    first = cells[cells["priority"] == PRIORITY_LABELS[0]]
-    second = cells[cells["priority"] == PRIORITY_LABELS[1]]
-    steep_ha = cells["severe_steep_ha"].sum()
+    """The answer in plain words for a reader without remote sensing, built from the numbers so
+    it can never disagree with them. ``grid`` is the ranked cells with ``lon`` and ``lat``."""
+    first = grid[grid["priority"] == PRIORITY_LABELS[0]]
+    second = grid[grid["priority"] == PRIORITY_LABELS[1]]
+    block = largest_block(grid)
+    steep_ha = grid["severe_steep_ha"].sum()
     kept = sens.iloc[:, -1]
     low, high = sens.index[0], sens.index[-1]
+    cover = first["green_ndvi"].median() / green_unburned
     return (
-        f"The fire burned {burned_ha:,.0f} ha {place}. {severe_ha:,.0f} ha burned at moderate-low "
-        f"severity or worse, and {steep_ha:,.0f} ha of that lies on slopes of {threshold_deg:.0f}° "
-        f"or more, the ground the USGS debris-flow model counts. "
-        f"{len(first)} cells of {cell_m:.0f} m are at least {shares[0]:.0%} severe and steep: "
-        f"treat these first ({first['severe_steep_ha'].sum():,.0f} ha). {len(second)} more are "
-        f"{shares[1]:.0%} to {shares[0]:.0%}: treat next ({second['severe_steep_ha'].sum():,.0f} ha). "
-        f"Green cover left in the first-priority cells: median NDVI "
-        f"{first['green_ndvi'].median():.2f}, against {green_unburned:.2f} on unburned ground. "
-        f"With the slope threshold at {low} or {high}, {kept.iloc[0]} and {kept.iloc[-1]} of the "
-        f"{len(first)} first-priority cells stay first."
+        f"The fire burned {burned_ha:,.0f} ha {place}. On {severe_ha:,.0f} ha it burned at moderate "
+        f"or high severity, and {steep_ha:,.0f} ha of that ground is {threshold_deg:.0f}° or "
+        f"steeper, where rain washes ash and soil downhill most easily. "
+        f"Treat first: {len(first)} squares of {cell_m:.0f} by {cell_m:.0f} m where at least "
+        f"{shares[0]:.0%} of the ground is both badly burned and steep, {first['severe_steep_ha'].sum():,.0f} ha. "
+        f"{len(block)} of them form one continuous area centred at {block['lat'].mean():.4f} N, "
+        f"{block['lon'].mean():.4f} E. Treat next: {len(second)} squares at {shares[1]:.0%} to "
+        f"{shares[0]:.0%}, {second['severe_steep_ha'].sum():,.0f} ha. The first squares keep only "
+        f"about {cover:.0%} of the green cover of unburned ground, so little holds the soil. The list "
+        f"hardly depends on the exact steepness limit: at {low}, {kept.iloc[0]} of the {len(first)} "
+        f"stay first; at {high}, {kept.iloc[-1]} do. Every square, with its coordinates, is in "
+        f"alert_cells.geojson and in the ranked table."
     )

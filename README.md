@@ -58,7 +58,7 @@ The notebook ends step 9 with a plain-language summary written by the code from 
    pip install -r requirements-gfm.txt
    ```
 
-   The first run downloads the Prithvi weights (1.3 GB) from Hugging Face into its cache. A GPU is optional: one image takes under a second on a 6 GB laptop GPU and about 4 s on a CPU.
+   The first run downloads the model weights from Hugging Face into its cache: Prithvi 1.3 GB, TerraMind 1.5 GB. A GPU is optional: on a 6 GB laptop GPU Prithvi takes under a second per image and TerraMind under a minute for its five samples; on a CPU, about 4 s and two minutes.
 
 5. The checks.
 
@@ -87,6 +87,7 @@ Steps 3 and 4 are optional: without them the notebook still runs top to bottom, 
 | 11. Limitations and next steps | notebook only |
 | Bonus A. The pipeline as MCP tools, and an agent | `servers/burn_severity/`, `src/burnsev/api.py`, `agent/` |
 | Bonus B. Prithvi-EO-2.0 burn scars against dNBR | `src/burnsev/prithvi.py` |
+| Bonus B. TerraMind land cover: what burned, distance to built area | `src/burnsev/terramind.py` |
 
 The notebook shows the source of the functions that carry the science next to the cells that call them.
 
@@ -99,12 +100,14 @@ In `outputs/`, all reopened and checked by the notebook:
 - `before_after.png`, `priority_map.png`.
 - `agent_runs.json`, `agent_models.json`: the saved runs of bonus A (three conversations; one question to three models), replayed when no model key is set.
 - `prithvi_burn_probability_20250806_30m.tif`, `prithvi_burn_probability_20250814_30m.tif`: bonus B, the burn-scar probability from Prithvi before and after the fire, in percent, COG at 30 m; read back when torch is not installed.
+- `terramind_land_cover_20250725_10m.tif` (with its colour table), `terramind_votes_20250725_10m.tif`: bonus B, the land cover TerraMind generates from the image of 25 July, majority of five samples, and how many samples gave each pixel; COG at 10 m.
+- `priority_cells_land_cover.geojson`: the 159 ranked cells with the share of their burned ground that was trees and the distance to the nearest built area.
 
 They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](https://geojson.io).
 
 ## Checks
 
-Every change went through a branch and a pull request. GitHub Actions runs ruff, 80 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi input and output handling without the model), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+Every change went through a branch and a pull request. GitHub Actions runs ruff, 86 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
 
 ## Bonus A: the pipeline as tools for a language model
 
@@ -122,7 +125,7 @@ python -m agent.chat                             # a conversation in the termina
 ## Bonus B: geospatial foundation models
 
 - `src/burnsev/prithvi.py` runs [Prithvi-EO-2.0-300M-BurnScars](https://huggingface.co/ibm-nasa-geospatial/Prithvi-EO-2.0-300M-BurnScars) (IBM and NASA) through TerraTorch on one Sentinel-2 image, averaged to the model's 30 m. On 14 August it calls 803 ha burned, 676 ha of them inside the dNBR main fire of 737 ha (IoU 0.78), and it finds nearly all of the moderate and high classes. A control on 6 August, before the fire, shows what one image cannot do: the model also calls the scars of the 2017 fires burned, which dNBR, measuring change, leaves out.
-- TerraMind, for the land cover that band maths cannot give: next.
+- `src/burnsev/terramind.py` generates land cover with [TerraMind 1.0 base](https://huggingface.co/ibm-esa-geospatial/TerraMind-1.0-base) (IBM, ESA and Forschungszentrum Jülich) from the 12 bands of 25 July, before the fires, as the majority of five seeded samples. It gives the same class as ESRI's own 2023 map on 90 % of the pixels. It answers what band maths cannot: of the 177 ha of severe and steep ground, 118 ha were trees and 59 ha rangeland before the fire, and the first-priority cells lie 775 to 1,640 m from the nearest built area.
 
 ## Data and credits
 
@@ -130,6 +133,8 @@ python -m agent.chat                             # a conversation in the termina
 - Copernicus DEM GLO-30, used as the 30 m comparison: produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA.
 - TINITALY 1.1: Tarquini S., Isola I., Favalli M., Battistini A., Dotta G. (2023). TINITALY, a digital elevation model of Italy with a 10 meters cell size (Version 1.1). INGV. https://doi.org/10.13127/tinitaly/1.1. CC BY 4.0. A cut of the box is kept in `data/reference/`.
 - Burnt-area polygons: [EFFIS](https://forest-fire.emergency.copernicus.eu), European Commission Joint Research Centre, fetched on 23 September 2026 and kept in `data/reference/`.
+- TerraMind 1.0 base: IBM, ESA and Forschungszentrum Jülich, Apache 2.0; Jakubik et al. (2025), TerraMind: Large-Scale Generative Multimodality for Earth Observation, ICCV 2025, arXiv:2504.11171.
+- ESRI 10 m Annual Land Use Land Cover 2023, used to check TerraMind: Impact Observatory, Microsoft and Esri, CC BY 4.0, through Microsoft Planetary Computer; Karra et al. (2021), Global land use/land cover with Sentinel-2 and deep learning, IGARSS 2021.
 - Prithvi-EO-2.0-300M-BurnScars: IBM and NASA, Apache 2.0; Szwarcman et al. (2024), Prithvi-EO-2.0: A Versatile Multi-Temporal Foundation Model for Earth Observation Applications, arXiv:2412.02732.
 - Method: Key and Benson (2006) for the dNBR classes; Staley et al. (2017) for the M1 terrain term; Horn (1981) for slope; Grohmann (2015) on resampling; Veraverbeke et al. (2010) on the post-fire window.
 

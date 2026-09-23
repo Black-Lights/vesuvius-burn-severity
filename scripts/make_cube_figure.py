@@ -31,7 +31,7 @@ SCL_COLOURS = ListedColormap(
      "#d0d0d0", "#ffffff", "#40e0d0", "#ff69b4"]
 )
 ASPECT = 560 / 637  # rows over columns
-FLATTEN = 0.45  # how much a layer is squashed to look like it lies flat
+FLATTEN = 0.40  # how much a layer is squashed to look like it lies flat
 MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
@@ -54,7 +54,8 @@ def draw_layer(ax, image, x0, y0, width, shear, cmap="gray", vmin=0, vmax=1, edg
                     interpolation="bilinear", origin="upper")
     art.set_transform(trans + ax.transData)
     corners = trans.transform([[0, 0], [width, 0], [width, height], [0, height]])
-    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=0.8))
+    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor="white", linewidth=5))
+    ax.add_patch(Polygon(corners, closed=True, fill=False, edgecolor=edge, linewidth=1.2))
     return trans
 
 
@@ -83,7 +84,7 @@ def main() -> Path:
     ax.text(10.4, 6.85, "Seven such stacks, one per band", ha="center", fontsize=14, weight="bold")
 
     # Left: the big stack, oldest at the bottom, one pixel followed through it.
-    width, shear, step, x0, y0 = 4.0, 1.3, 0.62, 0.9, 0.95
+    width, shear, step, x0, y0 = 3.6, 1.3, 0.85, 1.0, 0.95
     marks = []
     for k, day in enumerate(STACK_DATES):
         trans = draw_layer(ax, grey(refl["B12"].sel(time=day).squeeze("time").values),
@@ -94,14 +95,15 @@ def main() -> Path:
     (xb, yb), (xt, yt) = marks[0], marks[-1]
     ax.plot([xb, xt], [yb, yt], linestyle="--", color="#c0392b", linewidth=1.5)
     ax.plot([xb, xt], [yb, yt], "s", color="#c0392b", markersize=6)
-    ax.text(xt, 5.9, "red: the same pixel on every date", color="#c0392b", fontsize=10, ha="center")
+    ax.text(x0 + width + shear + 0.12, yb, "red: the same\npixel on every date", color="#c0392b",
+            fontsize=10, ha="left", va="center")
     ax.text(3.3, 0.42, "Follow the red pixel down the stack: 46 numbers. The median is the middle one.",
             ha="center", fontsize=10, color="#333")
     ax.text(3.3, 0.15, "Each image: 637 by 560 pixels of 20 m.", ha="center", fontsize=10, color="#555")
 
     # Right: a small stack per band, the same three dates in each.
-    swidth, sshear, sstep = 1.25, 0.4, 0.2
-    positions = [(7.3, 4.3), (8.85, 4.3), (10.4, 4.3), (11.95, 4.3), (8.1, 1.55), (9.65, 1.55), (11.2, 1.55)]
+    swidth, sshear, sstep = 1.2, 0.4, 0.3
+    positions = [(7.3, 4.2), (8.85, 4.2), (10.4, 4.2), (11.95, 4.2), (8.1, 1.5), (9.65, 1.5), (11.2, 1.5)]
     for (band, meaning, job), (sx, sy) in zip(BANDS, positions):
         for k, day in enumerate(SMALL_DATES):
             if band == "SCL":

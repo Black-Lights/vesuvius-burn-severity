@@ -262,10 +262,18 @@ def ndvi_before_after(before: xr.DataArray, after: xr.DataArray, burn: xr.DataAr
 AGREEMENT_COLOURS = {"both": "#4d4d4d", "only ours": "#d7301f", "only EFFIS": "#2c7fb8"}
 
 
-def agreement_map(ours: xr.DataArray, ref: xr.DataArray, scores: dict[str, float]) -> Figure:
-    """Our main fire against the EFFIS polygons on the same grid, cropped to the fire.
+def agreement_map(
+    ours: xr.DataArray,
+    ref: xr.DataArray,
+    scores: dict[str, float],
+    labels: tuple[str, str, str] = tuple(AGREEMENT_COLOURS),
+    title: str = "Main fire against the EFFIS burnt-area polygons, 20 m grid",
+) -> Figure:
+    """Two burn maps on the same grid, cropped to the fire: by default our main fire against the
+    EFFIS polygons.
 
-    Dark grey: burned in both. Red: burned only in ours. Blue: burned only in EFFIS.
+    Dark grey: burned in both. Red: burned only in ``ours``. Blue: burned only in ``ref``.
+    ``labels`` names the three in the legend.
     """
     from matplotlib.colors import ListedColormap
     from matplotlib.patches import Patch
@@ -285,13 +293,41 @@ def agreement_map(ours: xr.DataArray, ref: xr.DataArray, scores: dict[str, float
     areas = (scores["both_ha"], scores["only_ours_ha"], scores["only_reference_ha"])
     handles = [
         Patch(color=c, label=f"{name}: {ha:,.0f} ha")
-        for (name, c), ha in zip(AGREEMENT_COLOURS.items(), areas)
+        for name, c, ha in zip(labels, AGREEMENT_COLOURS.values(), areas)
     ]
     ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, 0.0), ncol=3,
               title=f"IoU {scores['iou']:.2f}", frameon=False)
-    ax.set_title("Main fire against the EFFIS burnt-area polygons, 20 m grid")
+    ax.set_title(title)
     ax.set_axis_off()
     fig.tight_layout()
+    return fig
+
+
+def burn_probability_maps(
+    before: xr.DataArray,
+    after: xr.DataArray,
+    days: tuple[str, str],
+    outlines: dict[str, tuple[xr.DataArray, str]],
+) -> Figure:
+    """A model's burn probability on two dates side by side, with the same outlines on both.
+
+    ``outlines`` maps a legend label to (mask, colour). Each outline is the outer edge of its
+    mask: holes are filled, so an unburned island inside a fire does not draw a line of its own.
+    White: no data (cloud).
+    """
+    from matplotlib.lines import Line2D
+    from scipy import ndimage
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.8))
+    for ax, day, probability in zip(axes, days, (before, after)):
+        image = ax.imshow(probability, cmap="magma_r", vmin=0, vmax=1, interpolation="nearest")
+        for mask, colour in outlines.values():
+            ax.contour(ndimage.binary_fill_holes(mask.values), levels=[0.5], colors=colour, linewidths=1.3)
+        ax.set_title(f"Burn scar probability, {day}")
+        ax.set_axis_off()
+    fig.colorbar(image, ax=axes, shrink=0.75, label="probability (burned above 0.5)")
+    handles = [Line2D([], [], color=colour, label=label) for label, (_, colour) in outlines.items()]
+    fig.legend(handles=handles, loc="lower center", ncol=len(handles), frameon=False)
     return fig
 
 

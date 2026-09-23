@@ -237,6 +237,24 @@ def assess_burn(
     if dem_name.startswith("Copernicus"):
         warnings.append("Slope from a 30 m model finds less steep ground than a 10 m one (in the Vesuvius "
                         "notebook: 128 against 177 ha severe and steep at 23 degrees).")
+    finer = "finer" if dem_name.startswith("TINITALY") else "coarser"
+    method = {
+        "severity": "dNBR = median NBR of the pre-fire window minus that of the post-fire window, clouds "
+                    "masked; Key and Benson (2006) classes; the largest connected burned patch is the fire",
+        "slope": f"{dem_name}, {finer} than the 20 m pixels; slope computed on the model's own grid "
+                 "(Horn's method), then resampled to the 20 m pixels",
+        "cells": "250 m squares ranked by the share of ground both burned at moderate or high severity "
+                 "(dNBR 0.27 or more) and at least the slope threshold steep: the terrain term of the M1 "
+                 "debris-flow model (Staley et al. 2017)",
+    }
+    limitations = [
+        "An early assessment, weeks after the fire: severity can change as vegetation recovers.",
+        "The class breaks come from North American forests (Key and Benson 2006); they are not calibrated here.",
+        "The ranking is an order of priority, not a probability of debris flow: rainfall is not modelled.",
+    ]
+    if result["usable_dates_per_pixel"]["post_fire"] < 5:
+        limitations.append(f"Only {result['usable_dates_per_pixel']['post_fire']} usable post-fire dates per "
+                           "pixel (median), so the post-fire median rests on few images.")
     return result | {
         "burned_ha": round(burned_ha),
         "severity_ha": {k: v for k, v in indices.area_by_class(severity, aoi.RESOLUTION).items() if k != "unburned"},
@@ -251,6 +269,8 @@ def assess_burn(
         "sensitivity": {str(k): {c: int(v) for c, v in row.items()} for k, row in sens.iterrows()},
         "summary": summary,
         "files": [p.as_posix() for p in sorted(out.iterdir())],
+        "method": method,
+        "limitations": limitations,
         "warnings": warnings,
     }
 
@@ -332,6 +352,14 @@ def vegetation_change(bbox: str, period_a: str, period_b: str, min_drop: float =
         "min_drop": min_drop,
         "largest_drop_patches": listed,
         "files": [p.as_posix() for p in sorted(out.iterdir())],
+        "method": "median NDVI of each period per pixel, clouds masked; change = later minus earlier; "
+                  "patches are connected pixels, diagonals included, where NDVI fell by at least min_drop, "
+                  "1 ha or larger",
+        "limitations": [
+            ("NDVI measures green cover, not its cause: a harvest, drought, fire or new building "
+             "all lower it."),
+            *notes,
+        ],
         "notes": notes,
     }
 

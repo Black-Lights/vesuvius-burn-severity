@@ -19,13 +19,19 @@ FIRE_END = "2025-08-12"
 # median overstates the pre-fire state and inflates dNBR. Severe area (dNBR >= 0.27): 611 ha
 # with June, 564 ha with July, 525 ha with 6 August alone. July keeps a median with at least two
 # observations per pixel.
-# Post: starts after containment, ends before autumn cloud and senescence confound the signal.
+# Post: starts after containment and lasts one month. Recovery begins within weeks (mean NBR in
+# the burn -0.16 on 14 Aug, -0.06 by early September, +0.07 by 13 Oct), so a longer median mixes
+# recovery into severity and halves the high class (91 ha with a median to 15 Oct, 149 ha to
+# 15 Sep, 204 ha from the first clear image; total burned area 564, 591 and 628 ha). One month is
+# the timing of the Key and Benson initial assessment and still a median over several dates.
 PRE_WINDOW = ("2025-07-01", "2025-08-07")
-POST_WINDOW = ("2025-08-13", "2025-10-15")
+POST_WINDOW = ("2025-08-13", "2025-09-15")
 
-# Scenes are loaded from this date, earlier than PRE_WINDOW, so the NBR time series in step 5
-# shows the June-to-August slide that justifies the July start. The composites ignore June.
+# Scenes are loaded over a longer span than the composites use, so the NBR time series in step 5
+# shows the June slide before the fire and the recovery after it. The composites ignore the extra
+# dates.
 SERIES_START = "2025-06-01"
+SERIES_END = "2025-10-15"
 
 # Scene-level cloud cover ceiling for the STAC search (percent). Generous on purpose:
 # the per-pixel SCL mask does the real work, and a 25% scene can be clear over the AOI.

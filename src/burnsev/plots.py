@@ -9,6 +9,8 @@ import xarray as xr
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
+plt.rcParams.update({"font.size": 13, "axes.titlesize": 14, "legend.fontsize": 12})
+
 TRUE_COLOUR = ("B04", "B03", "B02")  # red, green, blue
 SWIR_COLOUR = ("B12", "B8A", "B04")  # short-wave infrared, near infrared, red
 MISSING_GREY = 0.9  # masked pixels (cloud, shadow, outside the swath) are drawn light grey
@@ -108,23 +110,33 @@ def nbr_history_and_dnbr(
     orbit that sees only the west of the box would otherwise produce meaningless means.
     """
     unburned = (abs(dnbr) < 0.1) & dnbr.notnull()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5), gridspec_kw={"width_ratios": [1.5, 1]})
-    lines = ((burn, "inside the burn", "firebrick"), (unburned, "unburned rest of the box", "seagreen"))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(17, 6), gridspec_kw={"width_ratios": [1.5, 1]})
+    lines = (
+        (burn, "burned area (dNBR > 0.27)", "firebrick"),
+        (unburned, "unburned area (dNBR within 0.1 of zero)", "seagreen"),
+    )
     for mask, label, colour in lines:
         sub = nbr.where(mask)
         usable = sub.notnull().sum(("y", "x")) / int(mask.sum())
         series = sub.mean(("y", "x")).where(usable >= min_usable).to_pandas().dropna()
-        ax1.plot(series.index, series.values, marker="o", color=colour, label=label)
-    ax1.axvspan(pd.Timestamp(pre[0]), pd.Timestamp(pre[1]), color="grey", alpha=0.12, label="windows")
-    ax1.axvspan(pd.Timestamp(post[0]), pd.Timestamp(post[1]), color="grey", alpha=0.12)
-    ax1.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.5, label="fire")
+        ax1.plot(series.index, series.values, marker="o", markersize=7, linewidth=2, color=colour,
+                 label=label)
+    top = ax1.get_ylim()[1]
+    for (a, b), name in ((pre, "pre-fire window"), (post, "post-fire window")):
+        ax1.axvspan(pd.Timestamp(a), pd.Timestamp(b), color="grey", alpha=0.12)
+        ax1.text(pd.Timestamp(a) + (pd.Timestamp(b) - pd.Timestamp(a)) / 2, top, name,
+                 ha="center", va="top", color="#444")
+    ax1.axvspan(pd.Timestamp(fire[0]), pd.Timestamp(fire[1]), color="orange", alpha=0.6, label="fire")
+    ax1.xaxis.set_major_locator(mdates.DayLocator(bymonthday=(1, 15)))
     ax1.xaxis.set_major_formatter(mdates.DateFormatter("%d %b"))
-    ax1.set_ylabel("mean NBR")
-    ax1.set_title(f"NBR over time, dates with at least {min_usable:.0%} of the area usable")
+    ax1.set_xlabel("2025")
+    ax1.set_ylabel("mean NBR over the area")
+    ax1.set_title(f"Mean NBR per date (dates with at least {min_usable:.0%} of the area usable)")
+    ax1.grid(alpha=0.3)
     ax1.legend(loc="lower left")
     image = ax2.imshow(dnbr.values, cmap="RdYlGn_r", vmin=-0.3, vmax=0.9)
-    fig.colorbar(image, ax=ax2, shrink=0.8, label="dNBR")
-    ax2.set_title("dNBR: pre-fire median minus post-fire median")
+    fig.colorbar(image, ax=ax2, shrink=0.8, label="dNBR (red = vegetation lost)")
+    ax2.set_title("dNBR map: pre-fire median minus post-fire median")
     ax2.set_axis_off()
     fig.tight_layout()
     return fig

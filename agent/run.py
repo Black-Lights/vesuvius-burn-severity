@@ -22,7 +22,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 import time
 import uuid
@@ -30,7 +29,6 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Self
 
-from dotenv import load_dotenv
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_mcp_adapters.tools import load_mcp_tools
 from langchain_openai import ChatOpenAI
@@ -40,37 +38,17 @@ from mcp.client.stdio import stdio_client
 
 from .graph import build_graph, is_feedback, sources, text_of
 from .grounding import check
+from .settings import PROVIDERS, endpoint, setting
 
 SERVER = Path(__file__).resolve().parents[1] / "servers" / "burn_severity" / "server.py"
-
-# name: (base URL, key variable, default model); None is OpenAI's own endpoint
-PROVIDERS = {
-    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY", "deepseek-flash"),  # V4.1 Flash
-    "kimi": ("https://api.moonshot.ai/v1", "KIMI_API_KEY", "kimi-k3"),
-    "openai": (None, "OPENAI_API_KEY", "gpt-5.4-mini"),
-}
-
-
-def setting(name: str) -> str | None:
-    """A value from the environment, without an inline comment; None when empty.
-
-    python-dotenv reads `LLM_MODEL=   # a note` as the note itself, so the comment is cut here.
-    """
-    value = os.environ.get(name, "").split("#")[0].strip()
-    return value or None
+# The server logs to stderr. Inside Jupyter sys.stderr is not a real file and a child process
+# cannot write to it, so the log goes to a file; it also keeps a record of each run.
+SERVER_LOG = Path(__file__).resolve().parents[1] / "data" / "cache" / "mcp_server.log"
 
 
 def make_llm(provider: str | None = None, model: str | None = None) -> tuple[ChatOpenAI, str, str]:
     """The chat model named in .env or in the arguments, with its provider and model name."""
-    load_dotenv(override=False)
-    provider = provider or setting("LLM_PROVIDER") or "deepseek"
-    if provider == "custom":
-        base_url, key, default = setting("LLM_BASE_URL"), setting("LLM_API_KEY"), None
-    elif provider in PROVIDERS:
-        base_url, key_var, default = PROVIDERS[provider]
-        key = setting(key_var)
-    else:
-        raise ValueError(f"LLM_PROVIDER must be one of {', '.join([*PROVIDERS, 'custom'])}, got {provider!r}")
+    provider, base_url, key, default = endpoint(provider)
     if not key:
         raise ValueError(f"no API key for {provider}: set it in .env (see .env.example)")
     name = model or setting("LLM_MODEL") or default
@@ -110,7 +88,9 @@ class Conversation:
 
     async def __aenter__(self) -> Self:
         server = StdioServerParameters(command=sys.executable, args=[str(SERVER), "--transport", "stdio"])
-        read, write = await self._stack.enter_async_context(stdio_client(server))
+        SERVER_LOG.parent.mkdir(parents=True, exist_ok=True)
+        log = self._stack.enter_context(SERVER_LOG.open("a", encoding="utf-8"))
+        read, write = await self._stack.enter_async_context(stdio_client(server, errlog=log))
         session = await self._stack.enter_async_context(ClientSession(read, write))
         await session.initialize()
         self.graph = build_graph(self.llm, await load_mcp_tools(session), self.reader, InMemorySaver())

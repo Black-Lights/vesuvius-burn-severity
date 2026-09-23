@@ -272,7 +272,7 @@ def slope_and_fire(
     thresholds: tuple[float, ...],
     chosen: float,
 ) -> Figure:
-    """Three panels, one above the other. Top: slope over the box with the main fire outlined.
+    """Three plots, one above the other. Top: slope over the box with the main fire outlined.
     Middle: the main fire split into low severity, severe on gentler ground and severe and steep
     (at or above ``chosen``). Bottom: the slope distribution inside the fire by severity, with
     the candidate thresholds.

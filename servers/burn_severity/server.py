@@ -162,7 +162,7 @@ async def vegetation_change(bbox: str, period_a: str, period_b: str, min_drop: f
     Returns:
         JSON with the scenes used, the median NDVI of each period, the hectares and share that
         dropped, the five largest patches of drop (hectares, mean change, latitude, longitude),
-        the files written and notes.
+        the files written and the limitations.
     """
     return await _run(api.vegetation_change, bbox=bbox, period_a=period_a, period_b=period_b,
                       min_drop=min_drop)

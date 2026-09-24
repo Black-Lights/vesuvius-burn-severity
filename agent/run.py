@@ -9,7 +9,7 @@ number check.
 The model is any chat model served in the OpenAI format, chosen in .env (see .env.example):
 LLM_PROVIDER picks DeepSeek, Kimi or OpenAI, LLM_MODEL overrides the model. LLM_PROVIDER=custom
 uses LLM_BASE_URL, LLM_API_KEY and LLM_MODEL, which is how a self-hosted model such as
-EVE-Instruct, served through an OpenAI-compatible endpoint, would be plugged in.
+EVE-Instruct would be plugged in, through an endpoint that returns tool calls in the OpenAI format.
 
 Usage:
     python -m agent.run "Which burned slopes of the Vesuvius fire of August 2025 need work first?"

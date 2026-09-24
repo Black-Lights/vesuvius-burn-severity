@@ -115,7 +115,7 @@ After the first commit, which set up the project, every change went through a br
 
 - `servers/burn_severity/server.py` is an MCP server following the conventions of the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) (FastMCP, `mcp[cli]==1.27.0`, async tools with docstrings, JSON results, stdio or HTTP) with four tools: `find_fires` (EFFIS burnt areas), `list_scenes` (Sentinel-2 scenes), `assess_burn` (steps 3 to 10 for any fire) and `vegetation_change` (median NDVI in two periods and where it dropped). The logic is in `src/burnsev/api.py`; on this notebook's box and dates `assess_burn` returns the notebook's numbers.
 - `agent/` is a LangGraph agent with the loop of EVE's `ReactAgent` and a `verify` node that finds every number of the answer in the tool results. Answers are written for a non-specialist or a specialist, and a conversation keeps its earlier turns.
-- The model is any chat model served in the OpenAI format, chosen in `.env` (see `.env.example`). DeepSeek V4.1 Flash, Kimi K3 and GPT-5.4 mini were tested. `LLM_PROVIDER=custom` points it at a self-hosted endpoint, such as EVE-Instruct behind an OpenAI-compatible server; that was not tested.
+- The model is any chat model served in the OpenAI format, chosen in `.env` (see `.env.example`). DeepSeek V4.1 Flash, Kimi K3 and GPT-5.4 mini were tested. `LLM_PROVIDER=custom` points it at a self-hosted endpoint, such as EVE-Instruct behind an OpenAI-compatible server, provided the server returns tool calls in the OpenAI format (EVE's `ReactAgent` also reads the `[TOOL_CALLS]` text format; this agent does not). That was not tested.
 
 ```bash
 pip install -r requirements-agent.txt
@@ -142,7 +142,7 @@ python -m agent.chat                             # a conversation in the termina
 
 ## Related
 
-The EFFIS server in the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) returns fire statistics and plots at 100 m through the Copernicus Data Space Statistical API. This notebook works on the pixels and returns rasters, vectors and a decision.
+The EFFIS server in the [EVE MCP tool registry](https://github.com/eve-esa/mcp-tool-registry) has a `compute_metrics` tool that downloads NDVI, NBR and BAIS2 through the Copernicus Data Space Process API, masks the burn where dNBR is above 0.30, and returns time series, plots and a regrowth rate. This notebook classifies severity per pixel and returns rasters, vectors and an erosion decision.
 
 ## AI tools
 

@@ -1,4 +1,4 @@
-# Bonus A: MCP server (same pin and import as eve-esa/mcp-tool-registry) and a
+# Bonus A: MCP server (the import of eve-esa/mcp-tool-registry and the pin of most of its servers) and a
 # LangGraph ReAct client (same wiring as eve-esa/agents).
 mcp[cli]==1.27.0
 httpx>=0.27

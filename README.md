@@ -109,7 +109,7 @@ They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](
 
 ## Checks
 
-After the first commit, which set up the project, every change went through a branch and a pull request. GitHub Actions runs ruff, 91 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+After the first commit, which set up the project, every change went through a branch and a pull request. GitHub Actions runs ruff, 93 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
 
 ## Bonus A: the pipeline as tools for a language model
 

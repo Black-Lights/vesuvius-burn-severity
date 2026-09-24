@@ -635,7 +635,7 @@ def interactive_map(perimeter_file, cells_file, backgrounds=(), layers=(), effis
     fmap = folium.Map(location=[(south + north) / 2, (west + east) / 2], zoom_start=14, tiles=None,
                       control_scale=True)
     folium.TileLayer("Esri.WorldImagery", name="satellite (Esri)").add_to(fmap)
-    folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)").add_to(fmap)
+    folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)", show=False).add_to(fmap)  # opens on satellite
     for layer in backgrounds:  # overlay=False: a background, chosen with the radio buttons
         folium.raster_layers.ImageOverlay(layer.url, layer.corners, name=layer.name, overlay=False,
                                           show=False).add_to(fmap)

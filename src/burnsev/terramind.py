@@ -93,8 +93,9 @@ def esri_to_classes(codes: np.ndarray) -> np.ndarray:
 
 def load_model(device: str):
     """TerraMind 1.0 base, set up to generate land cover from Sentinel-2 L2A (1.5 GB the first
-    time). ``standardize`` applies the model's own training means and standard deviations; 10
-    decoding steps, as in the model card's example."""
+    time). ``standardize`` applies the model's own training means and standard deviations. The
+    land cover decoder (a VQ-VAE) works in one pass, so ``timesteps`` (10, as in the model card's
+    example) changes nothing here: it sets the steps of the diffusion decoders of image outputs."""
     logging.getLogger("torch.utils.flop_counter").setLevel(logging.ERROR)  # see prithvi.load_model
     from terratorch import FULL_MODEL_REGISTRY
 
@@ -114,8 +115,8 @@ def generate(model, image: np.ndarray, device: str, seed: int) -> np.ndarray:
     """
     import torch
 
-    random.seed(seed)  # TerraTorch draws the sampling seed from Python's random module
-    torch.manual_seed(seed)  # and the decoder draws from torch's
+    random.seed(seed)  # TerraTorch draws its sampling seed from Python's random module
+    torch.manual_seed(seed)  # TerraTorch reseeds torch from that draw; kept in case a version does not
     rows, cols = image.shape[1:]
     padded = np.pad(np.nan_to_num(image), ((0, 0), (0, -rows % TILE), (0, -cols % TILE)), mode="reflect")
     classes = np.zeros(padded.shape[1:], dtype="uint8")

@@ -68,8 +68,8 @@ def pixel_xy(trans: Affine2D, col: int, row: int, width: float) -> tuple[float, 
 
 def main() -> Path:
     dn = ingest.load_cached(ingest.cache_path("s2_dn_20m"))
-    items = catalog.search_scenes(aoi.BBOX, *aoi.PRE_WINDOW, aoi.MAX_CLOUD) + catalog.search_scenes(
-        aoi.BBOX, *aoi.POST_WINDOW, aoi.MAX_CLOUD
+    items = catalog.search_scenes(  # covers every date of the cached cube, 1 June to 15 October
+        aoi.BBOX, aoi.SERIES_START, aoi.SERIES_END, aoi.MAX_CLOUD
     )
     refl = ingest.mask_and_scale(dn, catalog.offsets_by_day(items))
     dnbr = indices.dnbr(indices.nbr(refl), aoi.PRE_WINDOW, aoi.POST_WINDOW)

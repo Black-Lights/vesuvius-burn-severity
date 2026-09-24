@@ -17,5 +17,4 @@ matplotlib>=3.8
 folium>=0.17
 rio-cogeo>=5.3
 requests>=2.32
-python-dotenv>=1.0
 netCDF4>=1.6

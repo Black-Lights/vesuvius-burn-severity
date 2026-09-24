@@ -89,7 +89,7 @@ async def heavy(session: ClientSession) -> int:
     change = await call(session, "vegetation_change", bbox=VESUVIUS,
                         period_a="2025-07-01/2025-08-07", period_b="2025-08-13/2025-09-15")
     print("\nvegetation_change:", json.dumps({k: change.get(k) for k in ("median_ndvi", "dropped_ha",
-                                                                         "dropped_share_pct", "notes")}, indent=2))
+                                                                         "dropped_share_pct", "limitations")}, indent=2))
     for patch in change.get("largest_drop_patches", [])[:3]:
         print(f"  {patch['hectares']:>7} ha  mean change {patch['mean_change']}  at {patch['lat']}, {patch['lon']}")
     failures += not change.get("largest_drop_patches")

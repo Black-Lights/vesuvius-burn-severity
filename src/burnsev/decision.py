@@ -160,7 +160,7 @@ def summary(
     block = largest_block(grid)
     steep_ha = grid["severe_steep_ha"].sum()
     kept = sens.iloc[:, -1]
-    low, high = sens.index[0], sens.index[-1]
+    high = sens.index[-1]  # the strictest limit tried; a looser one can only add squares
     cover = first["green_ndvi"].median() / green_unburned
     return (
         f"The fire burned {burned_ha:,.0f} ha {place}. On {severe_ha:,.0f} ha it burned at moderate "
@@ -171,8 +171,8 @@ def summary(
         f"{len(block)} of them form one continuous area centred at {block['lat'].mean():.4f} N, "
         f"{block['lon'].mean():.4f} E. Treat next: {len(second)} squares at {shares[1]:.0%} to "
         f"{shares[0]:.0%}, {second['severe_steep_ha'].sum():,.0f} ha. The first squares keep only "
-        f"about {cover:.0%} of the green cover of unburned ground, so little holds the soil. The list "
-        f"hardly depends on the exact steepness limit: at {low}, {kept.iloc[0]} of the {len(first)} "
-        f"stay first; at {high}, {kept.iloc[-1]} do. Every square, with its coordinates, is in "
+        f"about {cover:.0%} of the green cover of unburned ground, so little holds the soil. With a "
+        f"stricter steepness limit of {high}, {kept.iloc[-1]} of the {len(first)} stay first. Every "
+        f"square, with its coordinates, is in "
         f"alert_cells.geojson and in the ranked table."
     )

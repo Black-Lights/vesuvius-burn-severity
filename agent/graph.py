@@ -131,7 +131,7 @@ def build_graph(llm, tools, reader: str | None = None, checkpointer=None):
         checks = state.get("checks", 0)
         if result["not_found"] and checks < MAX_CHECKS:
             note = HumanMessage(
-                id=f"verify-{checks + 1}",
+                id=f"verify-{len(messages)}",  # unique in the conversation, so each turn adds its own
                 content="These numbers in your answer are not in the tool results: "
                 f"{', '.join(result['not_found'])}. Rewrite the answer with numbers from the tool "
                 "results only, quoted as the tools give them.",

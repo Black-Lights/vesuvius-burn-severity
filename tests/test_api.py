@@ -29,6 +29,12 @@ def test_a_wrong_bbox_says_how_to_fix_it(text, hint):
         api.parse_bbox(text)
 
 
+def test_vegetation_change_refuses_periods_in_the_wrong_order():
+    # 2024 before 2022 would flip the sign of the change; the check runs before any download
+    with pytest.raises(api.BadArgument, match="period_a must end before period_b"):
+        api.vegetation_change("14.40,40.80,14.45,40.84", "2024-06-01/2024-08-31", "2022-06-01/2022-08-31")
+
+
 def test_period_must_be_iso_dates_in_order():
     assert api.parse_period("2025-08-01", "2025-08-31") == ("2025-08-01", "2025-08-31")
     with pytest.raises(api.BadArgument, match="YYYY-MM-DD"):

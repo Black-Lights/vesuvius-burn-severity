@@ -94,7 +94,7 @@ def show_models(record: dict) -> pd.DataFrame:
     for t in record["turns"]:
         calls = [c for s in t["steps"] if "tool_calls" in s for c in s["tool_calls"]]
         burn_call = next((c["args"] for c in calls if c["name"] == "assess_burn"), {})
-        burn = next((json.loads(s["content"]) for s in t["steps"] if s.get("name") == "assess_burn"), {})
+        burn = next((_as_dict(s["content"]) for s in t["steps"] if s.get("name") == "assess_burn"), {})
         answer = "\n".join(f"> {line}" for line in t["answer"].splitlines())
         display(Markdown(f"**{t['model']}**\n\n{answer}"))
         rows.append({
@@ -124,7 +124,7 @@ def check_sentence(check: dict) -> str:
 
 def brief(name: str, content: str) -> str:
     """One line on what a tool returned: the numbers that matter, not the whole JSON."""
-    r = json.loads(content)
+    r = _as_dict(content)
     if "error" in r:
         return f"error: {r['error']}"
     if name == "find_fires":
@@ -172,3 +172,12 @@ def show_turns(record: dict) -> pd.DataFrame:
                      "numbers in the answer": t["check"]["numbers_checked"],
                      "not in the tool results": len(t["check"]["not_found"])})
     return pd.DataFrame(rows).set_index("turn")
+
+
+def _as_dict(content: str) -> dict:
+    """A tool result as a dict. The server's results are JSON, but MCP's own errors (a failed
+    argument check, an unknown tool) are plain text: they come back as {"error": text}."""
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return {"error": content}

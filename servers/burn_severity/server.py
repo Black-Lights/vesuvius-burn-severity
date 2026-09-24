@@ -31,7 +31,7 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP
 
 # Importing burnsev also removes a system-wide PROJ_LIB before rasterio loads (see its __init__).
-from burnsev import api
+from burnsev import aoi, api
 
 # The pipeline reads data/reference and writes data/cache relative to the repository, whichever
 # folder the client starts the server from (an agent, the MCP Inspector, Claude Code).
@@ -109,7 +109,7 @@ async def assess_burn(
     bbox: str,
     fire_start: str,
     fire_end: str,
-    slope_threshold_deg: float = 23.0,
+    slope_threshold_deg: float = aoi.SLOPE_THRESHOLD_DEG,
     margin_km: float = 0.0,
 ) -> str:
     """Map how badly a fire burned and rank where to act first against erosion before the rains.
@@ -162,7 +162,7 @@ async def vegetation_change(bbox: str, period_a: str, period_b: str, min_drop: f
     Returns:
         JSON with the scenes used, the median NDVI of each period, the hectares and share that
         dropped, the five largest patches of drop (hectares, mean change, latitude, longitude),
-        the files written and notes.
+        the files written and the limitations.
     """
     return await _run(api.vegetation_change, bbox=bbox, period_a=period_a, period_b=period_b,
                       min_drop=min_drop)

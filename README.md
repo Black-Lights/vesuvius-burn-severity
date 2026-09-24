@@ -101,7 +101,7 @@ In `outputs/`, all reopened and checked by the notebook:
 - `main_fire_perimeter.geojson`, `priority_cells.geojson` (159 ranked cells), `alert_cells.geojson` (the 40 flagged cells): GeoJSON in longitude and latitude.
 - `before_after.png`, `priority_map.png`.
 - `agent_runs.json`, `agent_models.json`: the saved runs of bonus A (three conversations; one question to three models), replayed when no model key is set.
-- `prithvi_burn_probability_20250806_30m.tif`, `prithvi_burn_probability_20250814_30m.tif`: bonus B, the burn-scar probability from Prithvi before and after the fire, in percent, COG at 30 m; read back when torch is not installed.
+- `prithvi_burn_probability_20250806_30m.tif`, `prithvi_burn_probability_20250814_30m.tif`: bonus B, the burn-scar probability from Prithvi before and after the fire, 0 to 1 as float32, COG at 30 m; read back when torch is not installed.
 - `terramind_land_cover_20250725_10m.tif` (with its colour table), `terramind_votes_20250725_10m.tif`: bonus B, the land cover TerraMind generates from the image of 25 July, majority of five samples, and how many samples gave each pixel; COG at 10 m.
 - `priority_cells_land_cover.geojson`: the 159 ranked cells with the share of their burned ground that was trees and the distance to the nearest built area.
 
@@ -109,7 +109,7 @@ They open in QGIS by drag and drop; the GeoJSON files also open on [geojson.io](
 
 ## Checks
 
-After the first commit, which set up the project, every change went through a branch and a pull request. GitHub Actions runs ruff, 86 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
+After the first commit, which set up the project, every change went through a branch and a pull request. GitHub Actions runs ruff, 93 unit tests with no network (small synthetic arrays, fake EFFIS and STAC answers, the agent's graph with a scripted model, the Prithvi and TerraMind input and output handling without the models), a check that every notebook cell has been run, and the whole notebook on a clean Ubuntu machine that downloads the pixels itself.
 
 ## Bonus A: the pipeline as tools for a language model
 

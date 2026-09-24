@@ -1,12 +1,14 @@
-"""Checks on the display stretch and the web map layers with small synthetic images. No network,
-no figure."""
+"""Checks on the display stretch, the severity legend and the web map layers with small synthetic
+images. No network."""
 
 import base64
 import io
 
 import numpy as np
+import pandas as pd
 import rioxarray  # noqa: F401
 import xarray as xr
+from matplotlib.colors import to_rgba
 from PIL import Image
 from rasterio.warp import transform_bounds
 
@@ -46,6 +48,30 @@ def _grid(values):
     y = 4_520_000 - 10 - 20.0 * np.arange(rows)
     grid = xr.DataArray(values, dims=("y", "x"), coords={"y": y, "x": x})
     return grid.rio.write_crs("EPSG:32633")
+
+
+def test_window_text_writes_the_dates_in_words():
+    assert plots.window_text(("2025-07-01", "2025-08-07")) == "1 July to 7 August"
+
+
+def test_usable_share_shows_every_date_whatever_its_orbit():
+    days = pd.to_datetime(["2025-08-01", "2025-08-03", "2025-08-06"])
+    refl = xr.Dataset({"valid_fraction": ("time", [0.9, 0.5, 1.0])}, coords={"time": days})
+    orbits = {"2025-08-01": {79}, "2025-08-03": {8}, "2025-08-06": {79, 122}}  # orbit 8 is not ours
+    fig = plots.usable_share(refl, orbits, ("2025-08-08", "2025-08-12"))
+    dots = sum(len(points.get_offsets()) for points in fig.axes[0].collections)
+    assert dots == 3
+
+
+def test_severity_legend_keeps_each_class_colour_when_a_class_is_missing():
+    severity = _grid(np.array([[0, 2], [4, 4]], dtype="uint8"))  # no low, no moderate-high
+    fig = plots.severity_map(severity, {"unburned": 0.04, "moderate-low": 0.04, "high": 0.08})
+    legend = fig.axes[0].get_legend()
+    colours = {text.get_text().split(":")[0]: handle.get_facecolor()
+               for text, handle in zip(legend.get_texts(), legend.legend_handles)}
+    assert list(colours) == ["unburned", "moderate-low", "high"]
+    assert colours["moderate-low"] == to_rgba(plots.SEVERITY_COLOURS[2])
+    assert colours["high"] == to_rgba(plots.SEVERITY_COLOURS[4])
 
 
 def test_to_web_corners_match_the_grid():

@@ -8,6 +8,7 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.tools import tool
+from langgraph.checkpoint.memory import InMemorySaver
 
 from agent.graph import build_graph, system_prompt
 from agent.grounding import check, numbers
@@ -74,6 +75,29 @@ def test_a_wrong_number_is_sent_back_once_and_corrected():
     feedback = [m for m in state["messages"] if str(m.id or "").startswith("verify")]
     assert len(feedback) == 1 and "750" in feedback[0].content
     assert state["messages"][-1].content == "The fire burned 737 ha."
+
+
+def test_each_turn_of_a_conversation_gets_its_own_retry():
+    # Two turns on one thread, each with a wrong number first. The second turn's note must be added,
+    # not written over the first turn's note, or the second retry never happens.
+    replies = [_call("assess_burn", ARGS), AIMessage("The fire burned 750 ha."), AIMessage("The fire burned 737 ha."),
+               AIMessage("Of that, 580 ha were severe."), AIMessage("Of that, 576 ha were severe.")]
+    graph = build_graph(ScriptedModel(replies=replies), [assess_burn], checkpointer=InMemorySaver())
+    config = {"configurable": {"thread_id": "one conversation"}}
+    for question in ("How much burned?", "And how much of it severely?"):
+        state = asyncio.run(graph.ainvoke({"messages": [HumanMessage(question)], "checks": 0, "not_found": []}, config))
+        assert state["not_found"] == []
+    feedback = [m.content for m in state["messages"] if str(m.id or "").startswith("verify")]
+    assert len(feedback) == 2 and "750" in feedback[0] and "580" in feedback[1]
+    assert state["messages"][-1].content == "Of that, 576 ha were severe."
+
+
+def test_a_plain_text_tool_error_is_shown_not_raised():
+    from agent.notebook import brief
+
+    message = "Error executing tool assess_burn: 1 validation error for assess_burnArguments"
+    assert brief("assess_burn", message) == f"error: {message}"
+    assert brief("assess_burn", '{"error": "no Sentinel-2 scene"}') == "error: no Sentinel-2 scene"
 
 
 def test_a_number_still_wrong_after_the_retry_is_flagged():

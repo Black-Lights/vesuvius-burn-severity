@@ -210,7 +210,8 @@ def assess_burn(
     green = indices.window_median(ndvi, *post)
     threshold = float(slope_threshold_deg)
     cells = decision.score_cells(fire, severe, slope, green, threshold)
-    sens = decision.sensitivity(fire, severe, slope, green, (threshold - 3, threshold, threshold + 3), threshold)
+    offsets = [t - aoi.SLOPE_THRESHOLD_DEG for t in aoi.SLOPE_SENSITIVITY_DEG]  # the notebook's -3, 0, +3
+    sens = decision.sensitivity(fire, severe, slope, green, tuple(threshold + d for d in offsets), threshold)
     grid = decision.cells_to_geodataframe(cells, crs)
     burned_ha = float(fire.sum()) * PIXEL_HA
     severe_ha = float(severe.sum()) * PIXEL_HA
@@ -307,6 +308,8 @@ def vegetation_change(bbox: str, period_a: str, period_b: str, min_drop: float =
     """Median NDVI in two periods, the change, and where it dropped by at least ``min_drop``."""
     box = parse_bbox(bbox, MAX_PIXEL_SIDE_DEG)
     a, b = parse_interval(period_a, "period_a"), parse_interval(period_b, "period_b")
+    if a[1] >= b[0]:  # the change is later minus earlier, so the order decides its sign
+        raise BadArgument(f"period_a must end before period_b starts, got {period_a} and {period_b}")
     if not 0.02 <= min_drop <= 0.5:
         raise BadArgument(f"min_drop is an NDVI difference between 0.02 and 0.5, got {min_drop}")
     crs = utm_crs(box)
@@ -360,7 +363,6 @@ def vegetation_change(bbox: str, period_a: str, period_b: str, min_drop: float =
              "all lower it."),
             *notes,
         ],
-        "notes": notes,
     }
 
 

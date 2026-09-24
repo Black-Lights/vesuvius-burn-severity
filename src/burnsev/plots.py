@@ -19,6 +19,8 @@ from PIL import Image
 from rasterio.enums import Resampling
 from rasterio.warp import transform_bounds
 
+from . import aoi
+
 plt.rcParams.update({"font.size": 13, "axes.titlesize": 14, "legend.fontsize": 12})
 
 
@@ -96,6 +98,9 @@ def usable_share(refl: xr.Dataset, orbits: dict[str, set[int]], fire: tuple[str,
         seen = orbits[str(day.date())]
         labels[day] = "both orbits" if len(seen) > 1 else f"orbit {next(iter(seen))}"
     colours = {"orbit 79": "tab:blue", "orbit 122": "tab:purple", "both orbits": "tab:green"}
+    others = iter(["tab:brown", "tab:olive", "tab:cyan", "tab:pink"])
+    for label in sorted(set(labels.values()) - set(colours)):  # an orbit other than the two here
+        colours[label] = next(others, "black")
     fig, ax = plt.subplots(figsize=(10, 3.8))
     ax.plot(share.index, share.values, color="lightgrey", zorder=1)
     for label, colour in colours.items():
@@ -160,8 +165,11 @@ def severity_map(
         ha = float(excluded.sum()) * float(abs(severity.x[1] - severity.x[0])) ** 2 / 10_000
         areas["unburned"] = areas.get("unburned", 0.0) - ha  # the grey pixels get their own entry
         extra = [Patch(color=EXCLUDED_GREY, label=f"outside the main fire: {ha:,.0f} ha")]
+    names = [name for name, _, _ in aoi.SEVERITY_CLASSES]  # a class code is its position here
     handles = [
-        Patch(color=c, label=f"{n}: {areas[n]:,.0f} ha") for n, c in zip(areas, SEVERITY_COLOURS)
+        Patch(color=colour, label=f"{name}: {areas[name]:,.0f} ha")
+        for name, colour in zip(names, SEVERITY_COLOURS)
+        if name in areas  # a class with no pixel has no entry, and the others keep their colour
     ] + extra
     colours = ListedColormap([*SEVERITY_COLOURS, EXCLUDED_GREY])
     ax.imshow(shown, cmap=colours, vmin=0, vmax=5, interpolation="nearest")
@@ -183,6 +191,12 @@ def _area_means(ax, index: xr.DataArray, masks, min_usable: float) -> None:
                 label=label)
 
 
+def window_text(window: tuple[str, str]) -> str:
+    """A window of ISO dates in words: ("2025-07-01", "2025-08-07") gives "1 July to 7 August"."""
+    start, end = pd.Timestamp(window[0]), pd.Timestamp(window[1])
+    return f"{start.day} {start.month_name()} to {end.day} {end.month_name()}"
+
+
 def index_history_and_dnbr(
     nbr: xr.DataArray,
     ndvi: xr.DataArray,
@@ -201,7 +215,7 @@ def index_history_and_dnbr(
     """
     unburned = (abs(dnbr) < 0.1) & dnbr.notnull()
     masks = (
-        (burn, "burned area (dNBR > 0.27)", "firebrick"),
+        (burn, "the burn (dNBR ≥ 0.27)", "firebrick"),
         (unburned, "unburned area (dNBR within 0.1 of zero)", "seagreen"),
     )
     fig = plt.figure(figsize=(10, 20))
@@ -235,9 +249,11 @@ def index_history_and_dnbr(
     return fig
 
 
-def ndvi_before_after(before: xr.DataArray, after: xr.DataArray, burn: xr.DataArray) -> Figure:
-    """NDVI before and after the fire, the window medians, one above the other, with the outline
-    of the burn (dNBR > 0.27) on both.
+def ndvi_before_after(
+    before: xr.DataArray, after: xr.DataArray, burn: xr.DataArray, pre: tuple[str, str], post: tuple[str, str]
+) -> Figure:
+    """NDVI before and after the fire, the medians of the ``pre`` and ``post`` windows, one above
+    the other, with the outline of the burn (dNBR >= 0.27) on both.
 
     Drawn in steps of 0.1 on the colour scale of the web map: each colour is a range that can be
     read off the legend, and the picture stays a third of the size of a smooth one.
@@ -248,8 +264,8 @@ def ndvi_before_after(before: xr.DataArray, after: xr.DataArray, burn: xr.DataAr
     cmap = plt.get_cmap(NDVI_COLOURS["cmap"], len(steps) + 1)
     norm = BoundaryNorm(steps, cmap.N, extend="both")
     fig, axes = plt.subplots(2, 1, figsize=(10, 18), layout="constrained")
-    for ax, ndvi, title in ((axes[0], before, "NDVI before: median 1 July to 7 August"),
-                            (axes[1], after, "NDVI after: median 13 August to 15 September")):
+    for ax, ndvi, title in ((axes[0], before, f"NDVI before: median {window_text(pre)}"),
+                            (axes[1], after, f"NDVI after: median {window_text(post)}")):
         image = ax.imshow(ndvi.values, cmap=cmap, norm=norm, interpolation="nearest")
         ax.contour(burn.values.astype(float), levels=[0.5], colors="firebrick", linewidths=0.8)
         ax.set_title(title)
@@ -567,13 +583,16 @@ def _smooth_layer(name: str, da: xr.DataArray, colours: dict) -> WebLayer:
     return WebLayer(name, data_uri(rgba, "WEBP"), corners)
 
 
-def index_layers(ndvi_before: xr.DataArray, ndvi_after: xr.DataArray, dnbr: xr.DataArray) -> list[WebLayer]:
-    """NDVI before and after (window medians) and dNBR, in the colours of step 5. They cover the
-    whole box, so the map shows them as backgrounds: one at a time and opaque, so a colour always
-    means the same value, whatever lies underneath."""
+def index_layers(
+    ndvi_before: xr.DataArray, ndvi_after: xr.DataArray, dnbr: xr.DataArray, pre: tuple[str, str],
+    post: tuple[str, str],
+) -> list[WebLayer]:
+    """NDVI before and after (medians of the ``pre`` and ``post`` windows) and dNBR, in the colours
+    of step 5. They cover the whole box, so the map shows them as backgrounds: one at a time and
+    opaque, so a colour always means the same value, whatever lies underneath."""
     return [
-        _smooth_layer("NDVI before (1 Jul to 7 Aug median)", ndvi_before, NDVI_COLOURS),
-        _smooth_layer("NDVI after (13 Aug to 15 Sep median)", ndvi_after, NDVI_COLOURS),
+        _smooth_layer(f"NDVI before (median {window_text(pre)})", ndvi_before, NDVI_COLOURS),
+        _smooth_layer(f"NDVI after (median {window_text(post)})", ndvi_after, NDVI_COLOURS),
         _smooth_layer("dNBR", dnbr, DNBR_COLOURS),
     ]
 
@@ -616,7 +635,7 @@ def interactive_map(perimeter_file, cells_file, backgrounds=(), layers=(), effis
     fmap = folium.Map(location=[(south + north) / 2, (west + east) / 2], zoom_start=14, tiles=None,
                       control_scale=True)
     folium.TileLayer("Esri.WorldImagery", name="satellite (Esri)").add_to(fmap)
-    folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)").add_to(fmap)
+    folium.TileLayer("OpenStreetMap", name="streets (OpenStreetMap)", show=False).add_to(fmap)  # opens on satellite
     for layer in backgrounds:  # overlay=False: a background, chosen with the radio buttons
         folium.raster_layers.ImageOverlay(layer.url, layer.corners, name=layer.name, overlay=False,
                                           show=False).add_to(fmap)

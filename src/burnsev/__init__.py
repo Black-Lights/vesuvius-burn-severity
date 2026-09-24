@@ -4,6 +4,7 @@ The notebook imports this package; the MCP server (bonus A) wraps the same funct
 so there is one implementation of every step.
 """
 
+import logging
 import os
 
 # rasterio and pyproj ship their own copy of the PROJ database. If the machine also has a
@@ -15,6 +16,12 @@ import os
 # import burnsev before any other geospatial library, and restart a kernel started earlier.
 for _name in ("PROJ_LIB", "PROJ_DATA", "GDAL_DATA"):
     os.environ.pop(_name, None)
+
+# GDAL reports, through rasterio, options it ignores as warnings: DTYPE and ALWAYS_YX in a
+# reprojection, PREDICTOR on the uncompressed temporary files of the COG writer. They change no
+# result. A plain Jupyter kernel does not print them, but Colab does, because its root logger
+# has a handler. Only GDAL errors are shown.
+logging.getLogger("rasterio._env").setLevel(logging.ERROR)
 
 from . import aoi, api, catalog, decision, export, indices, ingest, reference, terrain  # noqa: F401
 

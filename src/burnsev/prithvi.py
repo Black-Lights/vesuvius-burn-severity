@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -29,7 +30,7 @@ WEIGHTS_FILE = "Prithvi_EO_V2_300M_BurnScars.pt"  # 1.3 GB, downloaded once to t
 BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12"]  # blue, green, red, narrow NIR, SWIR 1, SWIR 2
 MODEL_PIXEL_M = 30  # the training images (HLS) have 30 m pixels
 CHIP = 512  # the model reads 512 x 512 pixels at a time
-NO_DATA = 255  # in the saved files, which store the probability in percent
+NO_DATA = -9999.0  # in the saved files, as in dnbr_20m.tif
 
 
 def installed() -> bool:
@@ -74,6 +75,8 @@ def load_model(device: str):
     the training means and standard deviations of the six bands."""
     # torch notes at import that triton, a GPU compiler it does not need here, is missing.
     logging.getLogger("torch.utils.flop_counter").setLevel(logging.ERROR)
+    # TerraTorch's model code calls torch.jit.script, which this torch version marks as deprecated.
+    warnings.filterwarnings("ignore", message="`torch.jit.script` is deprecated", category=FutureWarning)
     import torch
     import yaml
     from huggingface_hub import hf_hub_download
@@ -135,18 +138,19 @@ def to_20m(values: np.ndarray, like: xr.DataArray) -> xr.DataArray:
 
 
 def save(probability: np.ndarray, like: xr.DataArray, path: Path, day: str) -> None:
-    """Write the probability as a COG in percent (0 to 100, 255 no data), a few tens of KB."""
-    percent = np.where(np.isnan(probability), NO_DATA, np.round(probability * 100)).astype("uint8")
-    export.write_cog(grid_30m(percent, like), path, nodata=NO_DATA, overview_resampling="average",
-                     tags={"quantity": f"burn scar probability (%), Prithvi-EO-2.0-300M-BurnScars, {day}",
+    """Write the probability as a float32 COG (0 to 1, -9999 no data). A replay reads back exactly
+    what the model gave, so it counts the same pixels as burned as the live run."""
+    values = probability.astype("float32")  # write_cog turns NaN into NO_DATA
+    export.write_cog(grid_30m(values, like), path, nodata=NO_DATA, overview_resampling="average",
+                     tags={"quantity": f"burn scar probability (0 to 1), Prithvi-EO-2.0-300M-BurnScars, {day}",
                            "source": "Sentinel-2 L2A, Microsoft Planetary Computer, averaged to 30 m"})
 
 
 def read(path: Path) -> np.ndarray:
-    """A probability saved by ``save``, back to 0 to 1 with NaN for no data."""
+    """A probability saved by ``save``, 0 to 1 with NaN for no data."""
     with rasterio.open(path) as src:
-        percent = src.read(1)
-    return np.where(percent == NO_DATA, np.nan, percent / 100)
+        values = src.read(1)
+    return np.where(values == NO_DATA, np.nan, values)
 
 
 def burn_maps(refl: xr.Dataset, days: list[str], like: xr.DataArray, out_dir: Path) -> tuple[dict, str]:

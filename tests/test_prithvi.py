@@ -71,12 +71,12 @@ def test_back_on_20m_each_pixel_takes_the_30m_pixel_under_its_centre():
 
 
 def test_a_saved_probability_reads_back_on_the_30m_grid(tmp_path):
-    probability = np.array([[0.0, 0.25], [0.991, np.nan]])
+    probability = np.array([[0.0, 0.25], [0.4999, np.nan]], dtype="float32")
     path = tmp_path / "p.tif"
     prithvi.save(probability, _like(3, 3), path, "2025-08-14")
     back = prithvi.read(path)
     assert np.allclose(back[0], [0.0, 0.25])
-    assert back[1, 0] == 0.99  # stored in whole percent
+    assert back[1, 0] == np.float32(0.4999)  # exact: still under 0.5, as the model gave it
     assert np.isnan(back[1, 1])
 
     import rasterio

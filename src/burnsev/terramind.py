@@ -158,7 +158,7 @@ def land_cover(day: str, like: xr.DataArray, out_dir: Path, colours: list[str]) 
     cover_file = out_dir / f"terramind_land_cover_{tag}_10m.tif"
     votes_file = out_dir / f"terramind_votes_{tag}_10m.tif"
     if not prithvi.installed():
-        return read(cover_file), read(votes_file), "read from the saved maps (torch not installed)"
+        return read(cover_file), read(votes_file), "read from the saved maps (TerraTorch not installed)"
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -161,7 +161,7 @@ def burn_maps(refl: xr.Dataset, days: list[str], like: xr.DataArray, out_dir: Pa
     """
     files = {day: out_dir / f"prithvi_burn_probability_{day.replace('-', '')}_30m.tif" for day in days}
     if not installed():
-        return {day: read(path) for day, path in files.items()}, "read from the saved maps (torch not installed)"
+        return {day: read(path) for day, path in files.items()}, "read from the saved maps (TerraTorch not installed)"
     import torch
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -92,10 +92,10 @@ def write_geojson(gdf: gpd.GeoDataFrame, path: Path) -> None:
     )
 
 
-def check_outputs(folder: Path = OUTPUT_DIR) -> pd.DataFrame:
-    """Reopen every file written: COG validity, CRS, size, features or pixels."""
+def check_outputs(paths: list[Path]) -> pd.DataFrame:
+    """Reopen each file in ``paths``: COG validity, CRS, size, features or pixels."""
     rows = []
-    for path in sorted(folder.iterdir()):
+    for path in sorted(paths):
         if path.suffix == ".tif":
             valid, errors, _ = cog_validate(str(path), quiet=True)
             with rasterio.open(path) as src:

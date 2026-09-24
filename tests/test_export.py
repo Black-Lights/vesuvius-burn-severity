@@ -42,3 +42,12 @@ def test_perimeter_area_and_geojson_in_longitude_latitude(tmp_path):
     assert perimeter["area_ha"].iloc[0] == 0.1  # three 20 m pixels = 0.12 ha, rounded to 0.1
     export.write_geojson(perimeter, tmp_path / "p.geojson")
     assert gpd.read_file(tmp_path / "p.geojson").crs.to_epsg() == 4326
+
+
+def test_check_outputs_reads_only_the_files_it_is_given(tmp_path):
+    export.write_cog(_utm(np.array([[0.5, 0.2]], dtype="float32")), tmp_path / "new.tif", nodata=-9999.0)
+    export.write_cog(_utm(np.array([[1.0]], dtype="float32")), tmp_path / "old.tif", nodata=-9999.0)
+    table = export.check_outputs([tmp_path / "new.tif"])  # old.tif, left by an earlier run, stays out
+    assert table.index.tolist() == ["new.tif"]
+    assert table.loc["new.tif", "check"] == "valid COG"
+    assert table.loc["new.tif", "content"] == "2 x 1 px, float32"

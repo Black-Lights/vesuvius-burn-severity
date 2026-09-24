@@ -17,15 +17,15 @@ FIRE_END = "2025-08-12"
 # Pre-fire and post-fire windows for the median composites.
 # Pre: same season as the fire, ends the day before it. It starts on 1 July, not 1 June: the
 # unburned reference stays flat all summer, but inside the future burn NBR slides from 0.50 in
-# June to 0.38 on 6 August (drying understory, small early-August fires), so a June-to-August
-# median overstates the pre-fire state and inflates dNBR. Severe area (dNBR >= 0.27): 611 ha
-# with June, 564 ha with July, 525 ha with 6 August alone. July keeps a median with at least two
-# observations per pixel.
-# Post: starts after containment and lasts one month. Recovery begins within weeks (mean NBR in
-# the burn -0.16 on 14 Aug, -0.06 by early September, +0.07 by 13 Oct), so a longer median mixes
-# recovery into severity and halves the high class (91 ha with a median to 15 Oct, 149 ha to
-# 15 Sep, 204 ha from the first clear image; total burned area 564, 591 and 628 ha). One month is
-# the timing of the Key and Benson initial assessment and still a median over several dates.
+# June to 0.39 on 6 August (drying understory, small early-August fires). A June-to-August median
+# overstates the pre-fire state and inflates dNBR: 637 ha severe (dNBR >= 0.27) with June, 591 ha
+# with July. July still gives at least two observations per pixel.
+# Post: starts after containment and lasts one month. Recovery begins within weeks (median NBR in
+# the burn -0.10 after the fire, back to 0.08 by 13 October), so a longer median mixes recovery
+# into severity. A median to 15 October gives 564 ha severe and 91 ha high, against 591 and 149 ha
+# to 15 September; the first clear image per pixel gives 628 and 204 ha. One month fits the Key
+# and Benson initial assessment (soon after the fire, before regrowth) and is still a median over
+# several dates.
 PRE_WINDOW = ("2025-07-01", "2025-08-07")
 POST_WINDOW = ("2025-08-13", "2025-09-15")
 
@@ -39,10 +39,10 @@ SERIES_END = "2025-10-15"
 # the per-pixel SCL mask does the real work, and a 25% scene can be clear over the AOI.
 MAX_CLOUD = 25.0
 
-# Bands, each with a job: B02, B03, B04 (blue, green, red, 10 m) for the pictures; B8A (near
-# infrared) and B12 (short-wave infrared 2), both 20 m, for the burn index; SCL, the scene
-# classification (20 m), for the cloud mask. B11 (short-wave infrared 1, 20 m) is not used by
-# the core: the foundation model in bonus B expects the six Harmonized Landsat Sentinel bands
+# Bands, each with a job: B02, B03, B04 (blue, green, red, 10 m) for the pictures, B04 also for
+# NDVI; B8A (near infrared) and B12 (short-wave infrared 2), both 20 m, for NBR, B8A also for NDVI;
+# SCL, the scene classification (20 m), for the cloud mask. B11 (short-wave infrared 1, 20 m) is not
+# used by the core: the foundation model in bonus B expects the six Harmonized Landsat Sentinel bands
 # (B02, B03, B04, B8A, B11, B12), so it is downloaded once with the others.
 BANDS = ["B02", "B03", "B04", "B8A", "B11", "B12", "SCL"]
 
